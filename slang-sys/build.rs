@@ -1,125 +1,211 @@
-extern crate bindgen;
-
 use std::env;
 
 fn main() {
+	println!("cargo:rerun-if-changed=build.rs");
 	println!("cargo:rerun-if-env-changed=SLANG_DIR");
 	println!("cargo:rerun-if-env-changed=SLANG_INCLUDE_DIR");
 	println!("cargo:rerun-if-env-changed=SLANG_LIB_DIR");
 	println!("cargo:rerun-if-env-changed=VULKAN_SDK");
 
-	let include_dir = if let Ok(dir) = env::var("SLANG_INCLUDE_DIR") {
-		dir
-	} else if let Ok(dir) = env::var("SLANG_DIR") {
-		format!("{dir}/include")
-	} else if let Ok(dir) = env::var("VULKAN_SDK") {
-		format!("{dir}/include/slang")
-	} else {
-		panic!("The environment variable SLANG_INCLUDE_DIR, SLANG_DIR, or VULKAN_SDK must be set");
-	};
+	#[cfg(feature = "bindgen")]
+	generate::bindings();
 
-	let lib_dir = if let Ok(dir) = env::var("SLANG_LIB_DIR") {
-		dir
+	link();
+}
+
+/// The directory named by `SLANG_<KIND>_DIR`, else `SLANG_DIR/<kind>`, else
+/// the Vulkan SDK's copy.
+fn slang_dir(kind: &str, vulkan_sdk_subdir: &str) -> Option<String> {
+	let upper = kind.to_ascii_uppercase();
+	if let Ok(dir) = env::var(format!("SLANG_{upper}_DIR")) {
+		Some(dir)
 	} else if let Ok(dir) = env::var("SLANG_DIR") {
-		format!("{dir}/lib")
+		Some(format!("{dir}/{kind}"))
 	} else if let Ok(dir) = env::var("VULKAN_SDK") {
-		format!("{dir}/lib")
+		Some(format!("{dir}/{vulkan_sdk_subdir}"))
 	} else {
-		panic!("The environment variable SLANG_LIB_DIR, SLANG_DIR, or VULKAN_SDK must be set");
-	};
+		None
+	}
+}
+
+fn link() {
+	let lib_dir = slang_dir("lib", "lib").unwrap_or_else(|| {
+		panic!("The environment variable SLANG_LIB_DIR, SLANG_DIR, or VULKAN_SDK must be set")
+	});
 
 	if !lib_dir.is_empty() {
 		println!("cargo:rustc-link-search=native={lib_dir}");
 	}
 
 	println!("cargo:rustc-link-lib=dylib=slang");
-
-	let out_dir = env::var("OUT_DIR").expect("Couldn't determine output directory.");
-
-	bindgen::builder()
-		.header(format!("{include_dir}/slang.h").as_str())
-		.clang_arg("-v")
-		.clang_arg("-xc++")
-		.clang_arg("-std=c++17")
-		.allowlist_function("spReflection.*")
-		.allowlist_function("spComputeStringHash")
-		.allowlist_function("slang_.*")
-		.allowlist_type("slang.*")
-		.allowlist_var("SLANG_.*")
-		.with_codegen_config(
-			bindgen::CodegenConfig::FUNCTIONS
-				| bindgen::CodegenConfig::TYPES
-				| bindgen::CodegenConfig::VARS,
-		)
-		.parse_callbacks(Box::new(ParseCallback {}))
-		.default_enum_style(bindgen::EnumVariation::Rust {
-			non_exhaustive: false,
-		})
-		.constified_enum("SlangProfileID")
-		.constified_enum("SlangCapabilityID")
-		.vtable_generation(true)
-		.layout_tests(false)
-		.derive_copy(true)
-		.generate()
-		.expect("Couldn't generate bindings.")
-		.write_to_file(format!("{out_dir}/bindings.rs").as_str())
-		.expect("Couldn't write bindings.");
 }
 
-#[derive(Debug)]
-struct ParseCallback {}
+/// Regenerates the bindings from a Slang install's `slang.h` (the `bindgen`
+/// feature). The crate then compiles against the fresh output in `OUT_DIR`;
+/// with `SHADER_SLANG_SYS_BINDINGS_OUT` set, the two files are also written
+/// to that directory, which is how `generate-bindings.sh` refreshes the
+/// checked-in copies in `src/`.
+#[cfg(feature = "bindgen")]
+mod generate {
+	use std::env;
+	use std::path::Path;
 
-impl bindgen::callbacks::ParseCallbacks for ParseCallback {
-	fn enum_variant_name(
-		&self,
-		enum_name: Option<&str>,
-		original_variant_name: &str,
-		_variant_value: bindgen::callbacks::EnumVariantValue,
-	) -> Option<String> {
-		let enum_name = enum_name?;
+	pub fn bindings() {
+		println!("cargo:rerun-if-env-changed=SHADER_SLANG_SYS_BINDINGS_OUT");
 
-		// Map enum names to the part of their variant names that needs to be trimmed.
-		// When an enum name is not in this map the code below will try to trim the enum name itself.
-		let mut map = std::collections::HashMap::new();
-		map.insert("SlangMatrixLayoutMode", "SlangMatrixLayout");
-		map.insert("SlangCompileTarget", "Slang");
+		let include_dir = super::slang_dir("include", "include/slang").unwrap_or_else(|| {
+			panic!(
+				"The bindgen feature needs slang.h: set SLANG_INCLUDE_DIR, SLANG_DIR, or VULKAN_SDK"
+			)
+		});
+		let header = format!("{include_dir}/slang.h");
+		println!("cargo:rerun-if-changed={header}");
 
-		let trim = map.get(enum_name).unwrap_or(&enum_name);
-		let new_variant_name = pascal_case_from_snake_case(original_variant_name);
-		let new_variant_name = new_variant_name.trim_start_matches(trim);
-		Some(new_variant_name.to_string())
-	}
+		let out_dir = env::var("OUT_DIR").expect("Couldn't determine output directory.");
+		let copy_to = env::var_os("SHADER_SLANG_SYS_BINDINGS_OUT");
 
-	#[cfg(feature = "serde")]
-	fn add_derives(&self, info: &bindgen::callbacks::DeriveInfo<'_>) -> Vec<String> {
-		if info.name.starts_with("Slang") && info.kind == bindgen::callbacks::TypeKind::Enum {
-			return vec!["serde::Serialize".into(), "serde::Deserialize".into()];
-		}
-		vec![]
-	}
-}
+		// Types and constants in one file, the C functions in another: the
+		// functions are declared differently depending on how the library
+		// is reached, so they are kept apart from the rest. One bindgen run
+		// (the allowlist pulls in the types the functions use), split by
+		// its top-level `extern` blocks.
+		let bindings = builder(&header)
+			.with_codegen_config(
+				bindgen::CodegenConfig::FUNCTIONS
+					| bindgen::CodegenConfig::TYPES
+					| bindgen::CodegenConfig::VARS,
+			)
+			.generate()
+			.expect("Couldn't generate bindings.")
+			.to_string();
+		let (types, functions) = split_functions(&bindings);
 
-/// Converts `snake_case` or `SNAKE_CASE` to `PascalCase`.
-/// If the input is already in `PascalCase` it will be returned as is.
-fn pascal_case_from_snake_case(snake_case: &str) -> String {
-	let mut result = String::new();
-
-	let should_lower = snake_case
-		.chars()
-		.filter(|c| c.is_alphabetic())
-		.all(|c| c.is_uppercase());
-
-	for part in snake_case.split('_') {
-		for (i, c) in part.chars().enumerate() {
-			if i == 0 {
-				result.push(c.to_ascii_uppercase());
-			} else if should_lower {
-				result.push(c.to_ascii_lowercase());
-			} else {
-				result.push(c);
+		let preamble = preamble(&include_dir);
+		for (name, body) in [("bindings.rs", types), ("functions.rs", functions)] {
+			let text = format!("{preamble}{body}");
+			std::fs::write(Path::new(&out_dir).join(name), &text)
+				.expect("Couldn't write bindings.");
+			if let Some(dir) = &copy_to {
+				std::fs::write(Path::new(dir).join(name), &text).expect("Couldn't write bindings.");
 			}
 		}
 	}
 
-	result
+	/// Splits bindgen's output into everything else and its top-level
+	/// `unsafe extern "C" { ... }` blocks (each opens and closes at column 0).
+	fn split_functions(bindings: &str) -> (String, String) {
+		let mut types = String::new();
+		let mut functions = String::new();
+		let mut in_block = false;
+		for line in bindings.lines() {
+			if line.starts_with("unsafe extern \"C\" {") {
+				in_block = true;
+			}
+			let out = if in_block { &mut functions } else { &mut types };
+			out.push_str(line);
+			out.push('\n');
+			if in_block && line == "}" {
+				in_block = false;
+			}
+		}
+		(types, functions)
+	}
+
+	fn preamble(include_dir: &str) -> String {
+		let version = std::fs::read_to_string(format!("{include_dir}/slang-tag-version.h"))
+			.ok()
+			.and_then(|text| {
+				text.lines()
+					.find_map(|line| line.trim().strip_prefix("#define SLANG_TAG_VERSION"))
+					.map(|v| v.trim().trim_matches('"').to_string())
+			})
+			.unwrap_or_else(|| "unknown".into());
+		format!(
+			"// Generated by `slang-sys/generate-bindings.sh` with bindgen from `slang.h`\n\
+			 // (Slang tag {version}). Do not edit by hand.\n\n"
+		)
+	}
+
+	fn builder(header: &str) -> bindgen::Builder {
+		bindgen::builder()
+			.header(header)
+			.clang_arg("-xc++")
+			.clang_arg("-std=c++17")
+			.allowlist_function("spReflection.*")
+			.allowlist_function("spComputeStringHash")
+			.allowlist_function("slang_.*")
+			.allowlist_type("slang.*")
+			.allowlist_var("SLANG_.*")
+			.parse_callbacks(Box::new(ParseCallback {}))
+			.default_enum_style(bindgen::EnumVariation::Rust {
+				non_exhaustive: false,
+			})
+			.constified_enum("SlangProfileID")
+			.constified_enum("SlangCapabilityID")
+			.vtable_generation(true)
+			.layout_tests(false)
+			.derive_copy(true)
+	}
+
+	#[derive(Debug)]
+	struct ParseCallback {}
+
+	impl bindgen::callbacks::ParseCallbacks for ParseCallback {
+		fn enum_variant_name(
+			&self,
+			enum_name: Option<&str>,
+			original_variant_name: &str,
+			_variant_value: bindgen::callbacks::EnumVariantValue,
+		) -> Option<String> {
+			let enum_name = enum_name?;
+
+			// Map enum names to the part of their variant names that needs to be trimmed.
+			// When an enum name is not in this map the code below will try to trim the enum name itself.
+			let mut map = std::collections::HashMap::new();
+			map.insert("SlangMatrixLayoutMode", "SlangMatrixLayout");
+			map.insert("SlangCompileTarget", "Slang");
+
+			let trim = map.get(enum_name).unwrap_or(&enum_name);
+			let new_variant_name = pascal_case_from_snake_case(original_variant_name);
+			let new_variant_name = new_variant_name.trim_start_matches(trim);
+			Some(new_variant_name.to_string())
+		}
+
+		// The checked-in bindings serve builds with and without the `serde`
+		// feature, so the derive is written conditionally.
+		fn add_attributes(&self, info: &bindgen::callbacks::AttributeInfo<'_>) -> Vec<String> {
+			if info.name.starts_with("Slang") && info.kind == bindgen::callbacks::TypeKind::Enum {
+				return vec![
+					"#[cfg_attr(feature = \"serde\", derive(serde::Serialize, serde::Deserialize))]"
+						.into(),
+				];
+			}
+			vec![]
+		}
+	}
+
+	/// Converts `snake_case` or `SNAKE_CASE` to `PascalCase`.
+	/// If the input is already in `PascalCase` it will be returned as is.
+	fn pascal_case_from_snake_case(snake_case: &str) -> String {
+		let mut result = String::new();
+
+		let should_lower = snake_case
+			.chars()
+			.filter(|c| c.is_alphabetic())
+			.all(|c| c.is_uppercase());
+
+		for part in snake_case.split('_') {
+			for (i, c) in part.chars().enumerate() {
+				if i == 0 {
+					result.push(c.to_ascii_uppercase());
+				} else if should_lower {
+					result.push(c.to_ascii_lowercase());
+				} else {
+					result.push(c);
+				}
+			}
+		}
+
+		result
+	}
 }

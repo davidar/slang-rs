@@ -2,11 +2,20 @@
 
 #![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(non_camel_case_types, non_snake_case, non_upper_case_globals)]
+#[cfg(not(feature = "bindgen"))]
+include!("bindings.rs");
+#[cfg(not(feature = "bindgen"))]
+include!("functions.rs");
+#[cfg(feature = "bindgen")]
 include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
+#[cfg(feature = "bindgen")]
+include!(concat!(env!("OUT_DIR"), "/functions.rs"));
 
 use std::ffi::{c_char, c_int, c_void};
 
-// Based on Slang version 2024.14.5
+// Hand-written vtables, each a prefix of the interface in slang.h (checked
+// slot by slot against Slang 2026.14.1). Methods are only ever appended to
+// these interfaces, so a prefix stays valid for later headers.
 
 #[repr(C)]
 pub struct ICastableVtable {
