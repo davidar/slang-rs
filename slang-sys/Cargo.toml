@@ -10,11 +10,20 @@ categories = ["compilers", "external-ffi-bindings"]
 [dependencies]
 libloading = "0.8"
 serde = { version = "1", features = ["derive"], optional = true }
+flate2 = { version = "1", optional = true }
 
 [build-dependencies]
 bindgen = { version = "0.72.0", optional = true }
+flate2 = { version = "1", optional = true }
+sha2 = { version = "0.10", optional = true }
+tar = { version = "0.4", default-features = false, optional = true }
+ureq = { version = "3", optional = true }
 
 [features]
+default = ["embed"]
+# Download the pinned official Slang release for the target at build time,
+# verify it, and embed its library in the binary; see README.
+embed = ["dep:flate2", "dep:sha2", "dep:tar", "dep:ureq"]
 serde = ["dep:serde"]
 # Link Slang at build time from SLANG_LIB_DIR / SLANG_DIR / VULKAN_SDK
 # instead of opening it at run time.

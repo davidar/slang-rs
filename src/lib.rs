@@ -13,6 +13,10 @@ pub(crate) use shader_slang_sys as sys;
 
 pub use sys::library::{self, Library, LoadError};
 
+/// The Slang library embedded in this binary (the `embed` feature).
+#[cfg(all(feature = "embed", not(feature = "system")))]
+pub use sys::embedded;
+
 pub use sys::{
 	SlangBindingType as BindingType, SlangCompileTarget as CompileTarget,
 	SlangDebugInfoLevel as DebugInfoLevel, SlangDeclKind as DeclKind,

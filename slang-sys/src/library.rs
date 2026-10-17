@@ -7,7 +7,11 @@
 //! - `system`: the library is linked at build time (`SLANG_DIR` and friends
 //!   at build time, the platform's library search path at run time), and
 //!   there is nothing to open.
-//! - otherwise the library is opened by its platform name
+//! - `embed` (the default): the library and its SPIR-V optimiser module were
+//!   embedded in the binary at build time; the first use writes them into a
+//!   cache directory (see [`embedded`](crate::embedded)) and opens the
+//!   library from there by absolute path.
+//! - neither: the library is opened by its platform name
 //!   (`libslang-compiler.so`, `libslang-compiler.dylib`, `slang-compiler.dll`,
 //!   then the older `slang` names), which the platform looks up in its usual
 //!   search path.
@@ -160,7 +164,12 @@ fn open_default() -> Result<Library, LoadError> {
 	})
 }
 
-#[cfg(not(feature = "system"))]
+#[cfg(all(not(feature = "system"), feature = "embed"))]
+fn open_default() -> Result<Library, LoadError> {
+	crate::embedded::open()
+}
+
+#[cfg(all(not(feature = "system"), not(feature = "embed")))]
 fn open_default() -> Result<Library, LoadError> {
 	let names: &[&str] = if cfg!(windows) {
 		&["slang-compiler.dll", "slang.dll"]

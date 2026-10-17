@@ -1,5 +1,9 @@
 use std::env;
 
+#[cfg(feature = "embed")]
+#[path = "build/embed.rs"]
+mod embed;
+
 fn main() {
 	println!("cargo:rerun-if-changed=build.rs");
 	println!("cargo:rerun-if-env-changed=SLANG_DIR");
@@ -14,7 +18,12 @@ fn main() {
 	// linked here (see src/library.rs).
 	if env::var_os("CARGO_FEATURE_SYSTEM").is_some() {
 		link();
+		return;
 	}
+
+	// The embedded library; `system` takes precedence when both are set.
+	#[cfg(feature = "embed")]
+	embed::run();
 }
 
 /// The directory named by `SLANG_<KIND>_DIR`, else `SLANG_DIR/<kind>`, else

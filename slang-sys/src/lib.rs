@@ -5,6 +5,8 @@
 #[macro_use]
 mod functions_macro;
 pub mod library;
+#[cfg(all(feature = "embed", not(feature = "system")))]
+pub mod embedded;
 
 #[cfg(not(feature = "bindgen"))]
 include!("bindings.rs");
