@@ -1297,8 +1297,6 @@ impl CompilerOptions {
 	}
 }
 
-// Left as written: rustfmt versions disagree on these macro calls.
-#[rustfmt::skip]
 impl CompilerOptions {
 	option!(MacroDefine, macro_define(key: &str, value: &str));
 	option!(Include, include(path: &str));
@@ -1327,16 +1325,28 @@ impl CompilerOptions {
 		self.push_ints(CompilerOptionName::Capability, capability.0 as _, 0)
 	}
 
-	option!(DefaultImageFormatUnknown, default_image_format_unknown(enable: bool));
-	option!(DisableDynamicDispatch, disable_dynamic_dispatch(enable: bool));
+	option!(
+		DefaultImageFormatUnknown,
+		default_image_format_unknown(enable: bool)
+	);
+	option!(
+		DisableDynamicDispatch,
+		disable_dynamic_dispatch(enable: bool)
+	);
 	option!(DisableSpecialization, disable_specialization(enable: bool));
 	option!(FloatingPointMode, floating_point_mode(mode: FloatingPointMode => sys::SlangFloatingPointMode));
 	option!(DebugInformation, debug_information(level: DebugInfoLevel => sys::SlangDebugInfoLevel));
 	option!(LineDirectiveMode, line_directive_mode(mode: LineDirectiveMode => sys::SlangLineDirectiveMode));
 	option!(Optimization, optimization(level: OptimizationLevel => sys::SlangOptimizationLevel));
 	option!(Obfuscate, obfuscate(enable: bool));
-	option!(VulkanUseEntryPointName, vulkan_use_entry_point_name(enable: bool));
-	option!(GLSLForceScalarLayout, glsl_force_scalar_layout(enable: bool));
+	option!(
+		VulkanUseEntryPointName,
+		vulkan_use_entry_point_name(enable: bool)
+	);
+	option!(
+		GLSLForceScalarLayout,
+		glsl_force_scalar_layout(enable: bool)
+	);
 	option!(EmitSpirvDirectly, emit_spirv_directly(enable: bool));
 
 	// Debugging
