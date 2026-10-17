@@ -40,7 +40,9 @@ unsafe impl Interface for FileSystem {
 /// read (`Error::Code(sys::SLANG_E_NOT_FOUND)` is what a missing one is).
 ///
 /// Called from whichever thread is compiling; a panic is caught and reported
-/// to Slang as a failure.
+/// to Slang as a failure. The session keeps the file system for its
+/// lifetime, hence `'static`: sources that outlive one compile go in by
+/// `Arc`.
 pub trait LoadFile: Send + Sync + 'static {
 	fn load_file(&self, path: &str, default: &DefaultFileSystem) -> Result<Vec<u8>>;
 }

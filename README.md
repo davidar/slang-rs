@@ -169,7 +169,7 @@ let session_desc = slang::SessionDesc::default()
 	.file_system(&file_system);
 ```
 
-The path is what Slang built, so a module served from memory is asked for under each search path in turn. `Blob::from_vec` wraps bytes without copying, for the calls that take a blob.
+The path is what Slang built, so a module served from memory is asked for under each search path in turn. The closure is `Send + Sync + 'static`, since Slang keeps the file system for the session's lifetime, so a buffer that lives only as long as one compile goes in through an `Arc`. `Blob::from_vec` wraps bytes without copying, for the calls that take a blob.
 
 ## Testing
 
