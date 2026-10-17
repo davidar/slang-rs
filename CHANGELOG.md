@@ -29,3 +29,33 @@
 - Failure paths no longer unwrap a possibly null diagnostics blob. The plain methods release the diagnostics blob they leaked on success.
 - C strings Slang returns (module name and path, build tag, dependency paths) read as `""` when null instead of being dereferenced.
 - A NUL inside a name is an error, not a panic, in the methods that return a `Result`.
+
+### Known limitations and open work
+
+- **Only Linux x86_64 has been built and run.** The macOS and Windows asset
+  tables, extraction, loading and glslang discovery are written from the
+  release layouts but untested. The checked-in bindings were generated on
+  Linux; the enum representation (`u32` here, `i32` under MSVC) is
+  ABI-identical but unverified.
+- **`spReflection_GetSession` is exported under a C++-mangled name** and will
+  not resolve on MSVC. The safe API does not call it; a call through the sys
+  layer panics with the missing name.
+- **Build-script cost.** Every rebuild of `shader-slang-sys` re-extracts and
+  recompresses the payload in an unoptimised build script, about 11 s. Caching
+  the compressed files by archive checksum would remove it.
+- **Clippy.** The branch adds warnings in the main crate and the checked-in
+  bindgen output produces about 200 in the sys crate; the generated files want
+  an `allow` and the rest a tidy pass before a release.
+- **Enums returned from Slang** (`TypeKind`, `BindingType` and the other C-like
+  enums bindgen produces) are undefined behaviour for any value the bindings
+  lack. Pinning the release keeps the bindings and the library in step; a
+  version bump must regenerate them. Newtypes with fallible conversion would
+  close this properly.
+
+### Found in upstream, not changed here
+
+- `find_entry_point_by_name` also finds a function marked only with
+  `[numthreads]`; its documentation says `[shader]` is required.
+- The README told Windows users to copy `slang.dll`; in the release that file
+  is a forwarder and the library itself is `slang-compiler.dll`. The embedded
+  default sidesteps this.
