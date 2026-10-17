@@ -184,6 +184,80 @@ fn slang_version_is_the_bindings_version() {
 	assert_eq!(slang::SLANG_VERSION, slang::embedded::version());
 }
 
+/// A file system made from Rust serves `import` from memory and defers the
+/// rest to the platform.
+#[test]
+fn file_system_serves_imports_from_memory() {
+	const LIB: &str = "float4 lib_colour() { return float4(1, 0, 0, 1); }";
+	let requests = Arc::new(Mutex::new(Vec::<String>::new()));
+	let seen = requests.clone();
+	let file_system =
+		slang::FileSystem::new(move |path: &str, default: &slang::DefaultFileSystem| {
+			seen.lock().unwrap().push(path.to_string());
+			let name = path.rsplit(['/', '\\']).next().unwrap_or(path);
+			if name == "lib.slang" {
+				Ok(LIB.as_bytes().to_vec())
+			} else {
+				default.load(path)
+			}
+		});
+	let global_session = global_session();
+	let targets = [slang::TargetDesc::default()
+		.format(slang::CompileTarget::Spirv)
+		.profile(global_session.find_profile("glsl_450"))];
+	let desc = slang::SessionDesc::default()
+		.targets(&targets)
+		.search_paths(["shaders"])
+		.file_system(&file_system);
+	let session = global_session.create_session(&desc).unwrap();
+
+	let mut diagnostics = slang::Diagnostics::new();
+	let main = session
+		.load_module_from_source_string_with_diagnostics(
+			"main",
+			"main.slang",
+			"import lib;\n\
+			 RWStructuredBuffer<float4> out_buffer;\n\
+			 [shader(\"compute\")] [numthreads(1, 1, 1)]\n\
+			 void main() { out_buffer[0] = lib_colour(); }",
+			&mut diagnostics,
+		)
+		.unwrap_or_else(|err| panic!("{err}: {diagnostics}"));
+	assert!(diagnostics.is_empty(), "{diagnostics}");
+	let requests = requests.lock().unwrap().clone();
+	assert!(
+		requests.iter().any(|path| path.ends_with("lib.slang")),
+		"Slang never asked the file system for lib.slang: {requests:?}"
+	);
+	let entry_point = main.find_entry_point_by_name("main").unwrap();
+	let program = session
+		.create_composite_component_type(&[main.into(), entry_point.into()])
+		.unwrap();
+	let code = program.link().unwrap().entry_point_code(0, 0).unwrap();
+	assert_eq!(words(code.as_slice())[0], SPIRV_MAGIC);
+
+	// The platform's files still load through the default.
+	let on_disk = session.load_module("test.slang").unwrap();
+	assert!(on_disk.find_entry_point_by_name("main").is_some());
+
+	// Reading through the file system directly.
+	let blob = file_system.load("anything/lib.slang").unwrap();
+	assert_eq!(blob.as_slice(), LIB.as_bytes());
+	assert!(matches!(
+		file_system.load("shaders/missing.slang"),
+		Err(slang::Error::Code(shader_slang_sys::SLANG_E_NOT_FOUND))
+	));
+}
+
+#[test]
+fn blob_from_vec() {
+	global_session();
+	let blob = slang::Blob::from_vec(b"abc".to_vec());
+	assert_eq!(blob.as_slice(), b"abc");
+	let empty = slang::Blob::from_vec(Vec::new());
+	assert!(empty.as_slice().is_empty());
+}
+
 #[test]
 fn optimiser_is_loaded() {
 	let (normal, normal_diagnostics) = compile_test_shader(&global_session());

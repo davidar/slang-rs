@@ -153,6 +153,24 @@ let loader = slang::SharedLibraryLoader::new(|path: &str, default: &slang::Defau
 global_session.set_shared_library_loader(Some(&loader));
 ```
 
+## Sources from memory
+
+`import` and `#include` resolve to paths, each search path joined with the name, and the session reads them through an `ISlangFileSystem`. `SessionDesc::file_system` installs a `FileSystem` made from a Rust closure, which can serve a module from memory, read it from somewhere else, or defer to the platform's file system:
+
+```rust
+let file_system = slang::FileSystem::new(|path: &str, default: &slang::DefaultFileSystem| {
+	match path.rsplit(['/', '\\']).next() {
+		Some("engine.slang") => Ok(ENGINE_SOURCE.as_bytes().to_vec()),
+		_ => default.load(path),
+	}
+});
+let session_desc = slang::SessionDesc::default()
+	.search_paths(["."])
+	.file_system(&file_system);
+```
+
+The path is what Slang built, so a module served from memory is asked for under each search path in turn. `Blob::from_vec` wraps bytes without copying, for the calls that take a blob.
+
 ## Testing
 
 `cargo test` runs the tests. `scripts/test-no-env.sh` builds them, then runs the test binaries under `env -i` with `PATH=/usr/bin:/bin` and a fresh, empty `HOME`. No `SLANG_DIR`, `LD_LIBRARY_PATH` or `VULKAN_SDK` is set, and no `slangc` is on the path. A test that runs only there checks from inside the process that every Slang library mapped into it came from the fresh cache.

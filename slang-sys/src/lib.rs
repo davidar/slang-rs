@@ -53,6 +53,13 @@ pub struct ISharedLibraryLoaderVtable {
 }
 
 #[repr(C)]
+pub struct IFileSystemVtable {
+	pub _base: ICastableVtable,
+
+	pub loadFile: unsafe extern "C" fn(*mut c_void, path: *const c_char, outBlob: *mut *mut ISlangBlob) -> SlangResult,
+}
+
+#[repr(C)]
 pub struct IBlobVtable {
 	pub _base: ISlangUnknown__bindgen_vtable,
 

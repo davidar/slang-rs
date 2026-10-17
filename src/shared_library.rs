@@ -23,8 +23,8 @@ use std::sync::atomic::{AtomicU32, Ordering};
 
 use crate::{Error, IUnknown, Interface, Result, UUID, succeeded, sys, uuid, vcall};
 
-const IID_UNKNOWN: UUID = uuid(0x00000000_0000_0000_c000000000000046);
-const IID_CASTABLE: UUID = uuid(0x87ede0e1_4852_44b0_8bf2cb31874de239);
+pub(crate) const IID_UNKNOWN: UUID = uuid(0x00000000_0000_0000_c000000000000046);
+pub(crate) const IID_CASTABLE: UUID = uuid(0x87ede0e1_4852_44b0_8bf2cb31874de239);
 
 /// An `ISlangSharedLibraryLoader`: Slang's own, or one made from Rust with
 /// [`new`](Self::new).
@@ -267,7 +267,7 @@ static LIBRARY_VTABLE: sys::ISharedLibraryVtable = sys::ISharedLibraryVtable {
 	findSymbolAddressByName: library_find_symbol,
 };
 
-trait Counted {
+pub(crate) trait Counted {
 	fn refs(&self) -> &AtomicU32;
 }
 
@@ -283,12 +283,12 @@ impl Counted for LibraryObject {
 	}
 }
 
-unsafe extern "C" fn add_ref<T: Counted>(this: *mut sys::ISlangUnknown) -> u32 {
+pub(crate) unsafe extern "C" fn add_ref<T: Counted>(this: *mut sys::ISlangUnknown) -> u32 {
 	let object = unsafe { &*(this as *const T) };
 	object.refs().fetch_add(1, Ordering::Relaxed) + 1
 }
 
-unsafe extern "C" fn release<T: Counted>(this: *mut sys::ISlangUnknown) -> u32 {
+pub(crate) unsafe extern "C" fn release<T: Counted>(this: *mut sys::ISlangUnknown) -> u32 {
 	let object = unsafe { &*(this as *const T) };
 	let left = object.refs().fetch_sub(1, Ordering::Release) - 1;
 	if left == 0 {
@@ -298,7 +298,7 @@ unsafe extern "C" fn release<T: Counted>(this: *mut sys::ISlangUnknown) -> u32 {
 	left
 }
 
-fn same(a: &UUID, b: &UUID) -> bool {
+pub(crate) fn same(a: &UUID, b: &UUID) -> bool {
 	a.data1 == b.data1 && a.data2 == b.data2 && a.data3 == b.data3 && a.data4 == b.data4
 }
 

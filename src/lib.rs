@@ -4,6 +4,7 @@
 #![allow(clippy::unusual_byte_groupings)]
 
 mod enums;
+mod file_system;
 pub mod reflection;
 mod shared_library;
 
@@ -17,6 +18,7 @@ use std::ptr::{NonNull, null, null_mut};
 
 pub(crate) use shader_slang_sys as sys;
 
+pub use file_system::{DefaultFileSystem, FileSystem, LoadFile};
 pub use shared_library::{
 	DefaultLoader, FindSymbol, LoadSharedLibrary, SharedLibrary, SharedLibraryLoader,
 };
@@ -420,6 +422,11 @@ impl Blob {
 		}
 		let blob = unsafe { sys::slang_createBlob(bytes.as_ptr() as *const _, bytes.len()) };
 		unsafe { Blob::from_raw(blob) }.ok_or(Error::Code(sys::SLANG_FAIL))
+	}
+
+	/// A blob that owns `bytes`, without copying them; it may be empty.
+	pub fn from_vec(bytes: Vec<u8>) -> Blob {
+		file_system::blob_from_vec(bytes)
 	}
 
 	pub fn as_slice(&self) -> &[u8] {
@@ -1217,6 +1224,14 @@ impl<'a> SessionDesc<'a> {
 	pub fn options(mut self, options: &'a CompilerOptions) -> Self {
 		self.inner.compilerOptionEntries = options.options.as_ptr() as _;
 		self.inner.compilerOptionEntryCount = options.options.len() as _;
+		self
+	}
+
+	/// Where the session reads source files from, in place of the
+	/// platform's file system (see [`FileSystem`]). The session keeps its
+	/// own reference once created.
+	pub fn file_system(mut self, file_system: &'a FileSystem) -> Self {
+		self.inner.fileSystem = unsafe { file_system.as_raw() };
 		self
 	}
 }
