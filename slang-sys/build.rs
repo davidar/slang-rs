@@ -15,15 +15,14 @@ fn main() {
 	generate::bindings();
 
 	// Without `system` the library is opened at run time and nothing is
-	// linked here (see src/library.rs).
+	// linked here (see src/library.rs). The embedded library; `system`
+	// takes precedence when both are set.
 	if env::var_os("CARGO_FEATURE_SYSTEM").is_some() {
 		link();
-		return;
+	} else {
+		#[cfg(feature = "embed")]
+		embed::run();
 	}
-
-	// The embedded library; `system` takes precedence when both are set.
-	#[cfg(feature = "embed")]
-	embed::run();
 }
 
 /// The directory named by `SLANG_<KIND>_DIR`, else `SLANG_DIR/<kind>`, else

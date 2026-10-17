@@ -1,0 +1,78 @@
+name: CI
+
+on:
+  push:
+    branches: [main, embed]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  RUSTDOCFLAGS: -D warnings
+  # The build script's download and payload caches (see slang-sys/build/embed.rs).
+  SHADER_SLANG_CACHE_DIR: ${{ github.workspace }}/.shader-slang-cache
+
+jobs:
+  lint:
+    name: fmt, clippy, docs
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: .shader-slang-cache
+          key: slang-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('slang-sys/build/embed.rs') }}
+      - run: cargo fmt --all --check
+      - run: cargo clippy --workspace --all-targets --features serde
+      - run: cargo doc --workspace --no-deps --features serde
+      - run: cargo check --workspace --no-default-features
+
+  # The default: the pinned release is downloaded at build time and the
+  # library embedded, so the tests need no Slang install.
+  embed:
+    name: embed (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: actions/cache@v4
+        with:
+          path: .shader-slang-cache
+          key: slang-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('slang-sys/build/embed.rs') }}
+      - run: cargo test --workspace --features serde
+      # The tests again, in a process with no Slang install in reach.
+      - if: runner.os != 'Windows'
+        run: scripts/test-no-env.sh --features serde
+
+  # Slang reached some other way: linked at build time (`system`), and
+  # opened by name from the library search path (no default features).
+  system:
+    name: system and no-default-features
+    runs-on: ubuntu-latest
+    env:
+      SLANG_ASSET: linux-x86_64-glibc-2.28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Unpack the pinned Slang release
+        run: |
+          version=$(sed -n 's/^const VERSION: &str = "\(.*\)";/\1/p' slang-sys/build/embed.rs)
+          sha256=$(grep -A1 "name: \"$SLANG_ASSET\"" slang-sys/build/embed.rs | sed -n 's/.*sha256: "\(.*\)".*/\1/p')
+          archive=slang-$version-$SLANG_ASSET.tar.gz
+          curl -sSfL -o "$archive" "https://github.com/shader-slang/slang/releases/download/v$version/$archive"
+          echo "$sha256  $archive" | sha256sum -c -
+          mkdir slang && tar -xzf "$archive" -C slang
+          echo "SLANG_DIR=$PWD/slang" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$PWD/slang/lib" >> "$GITHUB_ENV"
+      - run: cargo test --no-default-features --features system,serde
+      - run: cargo test --no-default-features --features serde
