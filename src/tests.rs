@@ -526,3 +526,207 @@ fn environment_is_clean() {
 		}
 	}
 }
+
+/// Every variant of every enum converts to its sys constant and back.
+#[test]
+fn enums_round_trip() {
+	use crate::sys;
+
+	macro_rules! check {
+		($name:ident, $sys:path) => {
+			assert!(!slang::$name::VARIANTS.is_empty());
+			for &(variant, raw) in slang::$name::VARIANTS {
+				assert_eq!(<$sys>::from(variant), raw, "{variant:?}");
+				assert_eq!(slang::$name::try_from(raw), Ok(variant));
+			}
+		};
+	}
+	crate::enums::for_each_enum!(check);
+
+	// An alias is the variant with the same value.
+	assert_eq!(slang::Stage::Pixel, slang::Stage::Fragment);
+	assert_eq!(
+		slang::Stage::try_from(sys::SlangStage::Pixel),
+		Ok(slang::Stage::Fragment)
+	);
+}
+
+/// A value the bindings lack is an error from `TryFrom`, naming the enum.
+#[test]
+fn unknown_enum_value() {
+	use crate::sys;
+
+	macro_rules! check {
+		($name:ident, $sys:path) => {
+			let raw = $sys(0x1234_5678);
+			assert!(
+				slang::$name::VARIANTS
+					.iter()
+					.all(|&(_, known)| known != raw)
+			);
+			let err = slang::$name::try_from(raw).unwrap_err();
+			assert_eq!(err.value, 0x1234_5678);
+			assert!(
+				stringify!($sys).ends_with(err.enum_name),
+				"{}",
+				err.enum_name
+			);
+		};
+	}
+	crate::enums::for_each_enum!(check);
+
+	assert_eq!(
+		slang::TypeKind::try_from(sys::SlangTypeKind(99)),
+		Err(slang::UnknownEnumValue {
+			enum_name: "SlangTypeKind",
+			value: 99,
+		})
+	);
+	// The enums over i32 keep a negative value as it is.
+	assert_eq!(
+		slang::CompileTarget::try_from(sys::SlangCompileTarget(-7)),
+		Err(slang::UnknownEnumValue {
+			enum_name: "SlangCompileTarget",
+			value: -7,
+		})
+	);
+}
+
+/// The safe API panics on a value the bindings lack, and says why.
+#[test]
+#[should_panic(expected = "Slang returned SlangTypeKind value 99, which these bindings (Slang")]
+fn unknown_enum_value_panics() {
+	let _: slang::TypeKind = crate::from_slang(crate::sys::SlangTypeKind(99));
+}
+
+/// With `serde`, the enums are written and read by variant name.
+#[cfg(feature = "serde")]
+#[test]
+fn enums_serde_by_name() {
+	use serde::Deserialize;
+	use serde::de::IntoDeserializer;
+	use serde::de::value::{Error, StrDeserializer};
+
+	assert_eq!(variant_name(&slang::TypeKind::Struct), Some("Struct"));
+	assert_eq!(variant_name(&slang::Stage::Pixel), Some("Fragment"));
+	assert_eq!(variant_name(&slang::OptimizationLevel::High), Some("High"));
+
+	let de: StrDeserializer<'_, Error> = "Spirv".into_deserializer();
+	assert_eq!(
+		slang::CompileTarget::deserialize(de),
+		Ok(slang::CompileTarget::Spirv)
+	);
+	let de: StrDeserializer<'_, Error> = "NotAKind".into_deserializer();
+	assert!(slang::TypeKind::deserialize(de).is_err());
+}
+
+/// The variant name a value serialises as, if it is a unit variant.
+#[cfg(feature = "serde")]
+fn variant_name<T: serde::Serialize>(value: &T) -> Option<&'static str> {
+	use serde::ser::{Impossible, Serialize, Serializer};
+
+	#[derive(Debug)]
+	struct NotUnitVariant;
+
+	impl std::fmt::Display for NotUnitVariant {
+		fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+			f.write_str("not a unit variant")
+		}
+	}
+
+	impl std::error::Error for NotUnitVariant {}
+
+	impl serde::ser::Error for NotUnitVariant {
+		fn custom<M: std::fmt::Display>(_: M) -> Self {
+			NotUnitVariant
+		}
+	}
+
+	/// Accepts a unit variant only, and returns its name.
+	struct VariantName;
+
+	type No = Impossible<&'static str, NotUnitVariant>;
+
+	macro_rules! reject {
+		($($method:ident($($arg:ty),*) -> $ok:ty;)*) => {
+			$(fn $method(self $(, _: $arg)*) -> Result<$ok, NotUnitVariant> {
+				Err(NotUnitVariant)
+			})*
+		};
+	}
+
+	impl Serializer for VariantName {
+		type Ok = &'static str;
+		type Error = NotUnitVariant;
+		type SerializeSeq = No;
+		type SerializeTuple = No;
+		type SerializeTupleStruct = No;
+		type SerializeTupleVariant = No;
+		type SerializeMap = No;
+		type SerializeStruct = No;
+		type SerializeStructVariant = No;
+
+		fn serialize_unit_variant(
+			self,
+			_: &'static str,
+			_: u32,
+			variant: &'static str,
+		) -> Result<&'static str, NotUnitVariant> {
+			Ok(variant)
+		}
+
+		reject! {
+			serialize_bool(bool) -> &'static str;
+			serialize_i8(i8) -> &'static str;
+			serialize_i16(i16) -> &'static str;
+			serialize_i32(i32) -> &'static str;
+			serialize_i64(i64) -> &'static str;
+			serialize_u8(u8) -> &'static str;
+			serialize_u16(u16) -> &'static str;
+			serialize_u32(u32) -> &'static str;
+			serialize_u64(u64) -> &'static str;
+			serialize_f32(f32) -> &'static str;
+			serialize_f64(f64) -> &'static str;
+			serialize_char(char) -> &'static str;
+			serialize_str(&str) -> &'static str;
+			serialize_bytes(&[u8]) -> &'static str;
+			serialize_none() -> &'static str;
+			serialize_unit() -> &'static str;
+			serialize_unit_struct(&'static str) -> &'static str;
+			serialize_seq(Option<usize>) -> No;
+			serialize_tuple(usize) -> No;
+			serialize_tuple_struct(&'static str, usize) -> No;
+			serialize_tuple_variant(&'static str, u32, &'static str, usize) -> No;
+			serialize_map(Option<usize>) -> No;
+			serialize_struct(&'static str, usize) -> No;
+			serialize_struct_variant(&'static str, u32, &'static str, usize) -> No;
+		}
+
+		fn serialize_some<V: ?Sized + Serialize>(
+			self,
+			_: &V,
+		) -> Result<&'static str, NotUnitVariant> {
+			Err(NotUnitVariant)
+		}
+
+		fn serialize_newtype_struct<V: ?Sized + Serialize>(
+			self,
+			_: &'static str,
+			_: &V,
+		) -> Result<&'static str, NotUnitVariant> {
+			Err(NotUnitVariant)
+		}
+
+		fn serialize_newtype_variant<V: ?Sized + Serialize>(
+			self,
+			_: &'static str,
+			_: u32,
+			_: &'static str,
+			_: &V,
+		) -> Result<&'static str, NotUnitVariant> {
+			Err(NotUnitVariant)
+		}
+	}
+
+	value.serialize(VariantName).ok()
+}
