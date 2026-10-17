@@ -8,6 +8,7 @@ license = "MIT OR Apache-2.0"
 categories = ["compilers", "external-ffi-bindings"]
 
 [dependencies]
+libloading = "0.8"
 serde = { version = "1", features = ["derive"], optional = true }
 
 [build-dependencies]
@@ -15,6 +16,9 @@ bindgen = { version = "0.72.0", optional = true }
 
 [features]
 serde = ["dep:serde"]
+# Link Slang at build time from SLANG_LIB_DIR / SLANG_DIR / VULKAN_SDK
+# instead of opening it at run time.
+system = []
 # Regenerate the bindings from a Slang install's slang.h at build time
 # (needs libclang); see generate-bindings.sh.
 bindgen = ["dep:bindgen"]

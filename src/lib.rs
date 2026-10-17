@@ -11,6 +11,8 @@ use std::ptr::{null, null_mut};
 
 pub(crate) use shader_slang_sys as sys;
 
+pub use sys::library::{self, Library, LoadError};
+
 pub use sys::{
 	SlangBindingType as BindingType, SlangCompileTarget as CompileTarget,
 	SlangDebugInfoLevel as DebugInfoLevel, SlangDeclKind as DeclKind,
@@ -43,6 +45,8 @@ const fn uuid(uuid: u128) -> UUID {
 pub enum Error {
 	Code(sys::SlangResult),
 	Blob(Blob),
+	/// The Slang library could not be opened (see [`library`]).
+	Load(LoadError),
 }
 
 impl std::fmt::Debug for Error {
@@ -50,6 +54,7 @@ impl std::fmt::Debug for Error {
 		match self {
 			Error::Code(code) => write!(f, "{}", code),
 			Error::Blob(blob) => write!(f, "{}", blob.as_str().unwrap_or_default()),
+			Error::Load(err) => write!(f, "{}", err),
 		}
 	}
 }
@@ -180,25 +185,49 @@ unsafe impl Interface for GlobalSession {
 }
 
 impl GlobalSession {
+	/// A global session with the core module, or `None` when the Slang
+	/// library cannot be opened or the session cannot be created;
+	/// [`try_new`](Self::try_new) says why.
 	pub fn new() -> Option<GlobalSession> {
+		Self::try_new().ok()
+	}
+
+	/// A global session with the core module.
+	///
+	/// The first call in a process opens the Slang library (see [`library`]).
+	pub fn try_new() -> Result<GlobalSession> {
+		sys::library::library().map_err(Error::Load)?;
 		let mut global_session = null_mut();
-		unsafe { sys::slang_createGlobalSession(sys::SLANG_API_VERSION as _, &mut global_session) };
-		Some(GlobalSession(IUnknown(std::ptr::NonNull::new(
-			global_session as *mut _,
-		)?)))
+		let code = unsafe {
+			sys::slang_createGlobalSession(sys::SLANG_API_VERSION as _, &mut global_session)
+		};
+		Self::created(code, global_session)
 	}
 
 	pub fn new_without_core_module() -> Option<GlobalSession> {
+		sys::library::library().ok()?;
 		let mut global_session = null_mut();
-		unsafe {
+		let code = unsafe {
 			sys::slang_createGlobalSessionWithoutCoreModule(
 				sys::SLANG_API_VERSION as _,
 				&mut global_session,
 			)
 		};
-		Some(GlobalSession(IUnknown(std::ptr::NonNull::new(
-			global_session as *mut _,
-		)?)))
+		Self::created(code, global_session).ok()
+	}
+
+	fn created(
+		code: sys::SlangResult,
+		global_session: *mut sys::slang_IGlobalSession,
+	) -> Result<GlobalSession> {
+		let session =
+			std::ptr::NonNull::new(global_session as *mut _).map(|p| GlobalSession(IUnknown(p)));
+		match session {
+			// A failure that still hands back a session releases it here.
+			Some(session) if succeeded(code) => Ok(session),
+			_ if !succeeded(code) => Err(Error::Code(code)),
+			_ => Err(Error::Code(sys::SLANG_FAIL)),
+		}
 	}
 
 	pub fn create_session(&self, desc: &SessionDesc) -> Option<Session> {

@@ -2,6 +2,10 @@
 
 #![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(non_camel_case_types, non_snake_case, non_upper_case_globals)]
+#[macro_use]
+mod functions_macro;
+pub mod library;
+
 #[cfg(not(feature = "bindgen"))]
 include!("bindings.rs");
 #[cfg(not(feature = "bindgen"))]
@@ -12,6 +16,12 @@ include!(concat!(env!("OUT_DIR"), "/bindings.rs"));
 include!(concat!(env!("OUT_DIR"), "/functions.rs"));
 
 use std::ffi::{c_char, c_int, c_void};
+
+// Result codes slang.h defines with function-like macros, which bindgen skips.
+pub const SLANG_FAIL: SlangResult = 0x8000_4005_u32 as SlangResult;
+pub const SLANG_E_NO_INTERFACE: SlangResult = 0x8000_4002_u32 as SlangResult;
+pub const SLANG_E_INVALID_ARG: SlangResult = 0x8007_0057_u32 as SlangResult;
+pub const SLANG_E_NOT_FOUND: SlangResult = 0x8200_0005_u32 as SlangResult;
 
 // Hand-written vtables, each a prefix of the interface in slang.h (checked
 // slot by slot against Slang 2026.14.1). Methods are only ever appended to

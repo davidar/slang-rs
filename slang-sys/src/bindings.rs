@@ -1916,3 +1916,6 @@ pub struct SlangGlobalSessionDesc {
 	#[doc = " Reserved for future use."]
 	pub reserved: [u32; 16usize],
 }
+
+/// The Slang release whose `slang.h` these bindings were generated from.
+pub const SLANG_BINDINGS_VERSION: &str = "2026.14.1";
