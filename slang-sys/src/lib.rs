@@ -37,6 +37,20 @@ pub struct ICastableVtable {
 }
 
 #[repr(C)]
+pub struct ISharedLibraryVtable {
+	pub _base: ICastableVtable,
+
+	pub findSymbolAddressByName: unsafe extern "C" fn(*mut c_void, name: *const c_char) -> *mut c_void,
+}
+
+#[repr(C)]
+pub struct ISharedLibraryLoaderVtable {
+	pub _base: ISlangUnknown__bindgen_vtable,
+
+	pub loadSharedLibrary: unsafe extern "C" fn(*mut c_void, path: *const c_char, sharedLibraryOut: *mut *mut ISlangSharedLibrary) -> SlangResult,
+}
+
+#[repr(C)]
 pub struct IBlobVtable {
 	pub _base: ISlangUnknown__bindgen_vtable,
 
@@ -157,4 +171,51 @@ pub struct IModuleVtable {
 	pub getDependencyFileCount: unsafe extern "C" fn(*mut c_void) -> SlangInt32,
 	pub getDependencyFilePath: unsafe extern "C" fn(*mut c_void, index: SlangInt32) -> *const c_char,
 	pub getModuleReflection: unsafe extern "C" fn(*mut c_void) -> *mut slang_DeclReflection,
+}
+
+impl SlangResourceShape {
+	/// The base shape (texture 2D, structured buffer, ...), without flags.
+	pub const fn base_shape(self) -> Self {
+		Self(self.0 & Self::SlangResourceBaseShapeMask.0)
+	}
+
+	/// The flags (array, multisample, shadow, feedback, combined), without
+	/// the base shape.
+	pub const fn flags(self) -> Self {
+		Self(self.0 & Self::SlangResourceExtShapeMask.0)
+	}
+
+	/// Whether every bit of `other` is set.
+	pub const fn contains(self, other: Self) -> bool {
+		self.0 & other.0 == other.0
+	}
+
+	pub const fn is_array(self) -> bool {
+		self.contains(Self::SlangTextureArrayFlag)
+	}
+
+	pub const fn is_multisample(self) -> bool {
+		self.contains(Self::SlangTextureMultisampleFlag)
+	}
+
+	pub const fn is_shadow(self) -> bool {
+		self.contains(Self::SlangTextureShadowFlag)
+	}
+
+	pub const fn is_feedback(self) -> bool {
+		self.contains(Self::SlangTextureFeedbackFlag)
+	}
+
+	pub const fn is_combined(self) -> bool {
+		self.contains(Self::SlangTextureCombinedFlag)
+	}
+
+	/// The raw value, as Slang returns it.
+	pub const fn bits(self) -> u32 {
+		self.0
+	}
+
+	pub const fn from_bits(bits: u32) -> Self {
+		Self(bits)
+	}
 }

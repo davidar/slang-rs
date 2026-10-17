@@ -172,6 +172,9 @@ mod generate {
 			})
 			.constified_enum("SlangProfileID")
 			.constified_enum("SlangCapabilityID")
+			// A base shape combined with flags (array, multisample, shadow,
+			// feedback, combined), so any bit pattern is a valid value.
+			.bitfield_enum("SlangResourceShape")
 			.vtable_generation(true)
 			.layout_tests(false)
 			.derive_copy(true)
@@ -204,7 +207,9 @@ mod generate {
 		// The checked-in bindings serve builds with and without the `serde`
 		// feature, so the derive is written conditionally.
 		fn add_attributes(&self, info: &bindgen::callbacks::AttributeInfo<'_>) -> Vec<String> {
-			if info.name.starts_with("Slang") && info.kind == bindgen::callbacks::TypeKind::Enum {
+			let is_enum = info.kind == bindgen::callbacks::TypeKind::Enum
+				|| info.name == "SlangResourceShape";
+			if info.name.starts_with("Slang") && is_enum {
 				return vec![
 					"#[cfg_attr(feature = \"serde\", derive(serde::Serialize, serde::Deserialize))]"
 						.into(),
