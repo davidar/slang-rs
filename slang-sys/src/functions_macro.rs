@@ -54,14 +54,7 @@ macro_rules! slang_functions {
 				Functions {
 					$($(
 						$name: unsafe {
-							// A C++ name comes with bindgen's "\u{1}" prefix,
-							// which asks the linker not to decorate it.
-							let symbol = [$($link,)? stringify!($name)][0];
-							let symbol = symbol.strip_prefix('\u{1}').unwrap_or(symbol);
-							library
-								.get::<unsafe extern "C" fn($($ty),*) $(-> $ret)?>(symbol.as_bytes())
-								.ok()
-								.map(|f| *f)
+							$crate::library::resolve(library, [$($link,)? stringify!($name)][0])
 						},
 					)*)*
 				}

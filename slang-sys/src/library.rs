@@ -139,6 +139,36 @@ pub fn load(path: impl AsRef<Path>) -> Result<&'static Library, LoadError> {
 	}
 }
 
+/// Functions `slang.h` declares with C++ linkage, so their exported names
+/// are mangled: bindgen records the Itanium form (`\u{1}` in front asks the
+/// linker not to decorate it further), and MSVC decorates the same function
+/// differently. Checked against the 2026.14.1 release libraries; the MSVC
+/// form is the same on x64 and arm64.
+#[cfg(not(feature = "system"))]
+const MSVC_NAMES: &[(&str, &str)] = &[(
+	"_Z23spReflection_GetSessionP18SlangProgramLayout",
+	"?spReflection_GetSession@@YAPEAUISession@slang@@PEAUSlangProgramLayout@@@Z",
+)];
+
+/// Looks `symbol` up in `library`, trying its MSVC name too.
+///
+/// # Safety
+/// `T` must be the function pointer type the symbol has.
+#[cfg(not(feature = "system"))]
+pub(crate) unsafe fn resolve<T: Copy>(library: &libloading::Library, symbol: &str) -> Option<T> {
+	let symbol = symbol.strip_prefix('\u{1}').unwrap_or(symbol);
+	let msvc = MSVC_NAMES
+		.iter()
+		.filter(|(itanium, _)| *itanium == symbol)
+		.map(|(_, msvc)| *msvc);
+	for name in std::iter::once(symbol).chain(msvc) {
+		if let Ok(f) = unsafe { library.get::<T>(name.as_bytes()) } {
+			return Some(*f);
+		}
+	}
+	None
+}
+
 /// The function table, for the wrappers in functions.rs.
 #[cfg_attr(feature = "system", allow(dead_code))]
 pub(crate) fn functions() -> &'static Functions {
