@@ -14,7 +14,7 @@ impl Variable {
 	}
 
 	pub fn find_modifier(&self, id: ModifierID) -> Option<&Modifier> {
-		rcall!(spReflectionVariable_FindModifier(self, id) as Option<&Modifier>)
+		rcall!(spReflectionVariable_FindModifier(self, id.into()) as Option<&Modifier>)
 	}
 
 	pub fn user_attribute_count(&self) -> u32 {

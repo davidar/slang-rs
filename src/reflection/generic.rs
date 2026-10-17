@@ -1,5 +1,5 @@
 use super::{Decl, Type, Variable, rcall};
-use crate::{DeclKind, sys};
+use crate::{DeclKind, from_slang, sys};
 
 #[repr(transparent)]
 pub struct Generic(sys::SlangReflectionGeneric);
@@ -61,7 +61,7 @@ impl Generic {
 	}
 
 	pub fn inner_kind(&self) -> DeclKind {
-		rcall!(spReflectionGeneric_GetInnerKind(self))
+		from_slang(rcall!(spReflectionGeneric_GetInnerKind(self)))
 	}
 
 	pub fn outer_generic_container(&self) -> Option<&Generic> {

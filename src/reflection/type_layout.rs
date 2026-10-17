@@ -1,7 +1,7 @@
 use super::{Type, Variable, VariableLayout, rcall};
 use crate::{
 	BindingType, ImageFormat, MatrixLayoutMode, ParameterCategory, ResourceAccess, ResourceShape,
-	ScalarType, TypeKind, sys,
+	ScalarType, TypeKind, from_slang, sys,
 };
 
 #[repr(transparent)]
@@ -13,19 +13,19 @@ impl TypeLayout {
 	}
 
 	pub fn kind(&self) -> TypeKind {
-		rcall!(spReflectionTypeLayout_getKind(self))
+		from_slang(rcall!(spReflectionTypeLayout_getKind(self)))
 	}
 
 	pub fn size(&self, category: ParameterCategory) -> usize {
-		rcall!(spReflectionTypeLayout_GetSize(self, category))
+		rcall!(spReflectionTypeLayout_GetSize(self, category.into()))
 	}
 
 	pub fn stride(&self, category: ParameterCategory) -> usize {
-		rcall!(spReflectionTypeLayout_GetStride(self, category))
+		rcall!(spReflectionTypeLayout_GetStride(self, category.into()))
 	}
 
 	pub fn alignment(&self, category: ParameterCategory) -> i32 {
-		rcall!(spReflectionTypeLayout_getAlignment(self, category))
+		rcall!(spReflectionTypeLayout_getAlignment(self, category.into()))
 	}
 
 	pub fn field_count(&self) -> u32 {
@@ -79,7 +79,10 @@ impl TypeLayout {
 	}
 
 	pub fn element_stride(&self, category: ParameterCategory) -> usize {
-		rcall!(spReflectionTypeLayout_GetElementStride(self, category))
+		rcall!(spReflectionTypeLayout_GetElementStride(
+			self,
+			category.into()
+		))
 	}
 
 	pub fn element_type_layout(&self) -> Option<&TypeLayout> {
@@ -95,7 +98,7 @@ impl TypeLayout {
 	}
 
 	pub fn parameter_category(&self) -> ParameterCategory {
-		rcall!(spReflectionTypeLayout_GetParameterCategory(self))
+		from_slang(rcall!(spReflectionTypeLayout_GetParameterCategory(self)))
 	}
 
 	pub fn category_count(&self) -> u32 {
@@ -103,7 +106,9 @@ impl TypeLayout {
 	}
 
 	pub fn category_by_index(&self, index: u32) -> ParameterCategory {
-		rcall!(spReflectionTypeLayout_GetCategoryByIndex(self, index))
+		from_slang(rcall!(spReflectionTypeLayout_GetCategoryByIndex(
+			self, index
+		)))
 	}
 
 	pub fn categories(&self) -> impl ExactSizeIterator<Item = ParameterCategory> {
@@ -139,7 +144,7 @@ impl TypeLayout {
 	}
 
 	pub fn matrix_layout_mode(&self) -> MatrixLayoutMode {
-		rcall!(spReflectionTypeLayout_GetMatrixLayoutMode(self))
+		from_slang(rcall!(spReflectionTypeLayout_GetMatrixLayoutMode(self)))
 	}
 
 	pub fn generic_param_index(&self) -> i32 {
@@ -162,7 +167,9 @@ impl TypeLayout {
 	}
 
 	pub fn binding_range_type(&self, index: i64) -> BindingType {
-		rcall!(spReflectionTypeLayout_getBindingRangeType(self, index))
+		from_slang(rcall!(spReflectionTypeLayout_getBindingRangeType(
+			self, index
+		)))
 	}
 
 	pub fn is_binding_range_specializable(&self, index: i64) -> bool {
@@ -202,9 +209,9 @@ impl TypeLayout {
 	}
 
 	pub fn binding_range_image_format(&self, index: i64) -> ImageFormat {
-		rcall!(spReflectionTypeLayout_getBindingRangeImageFormat(
+		from_slang(rcall!(spReflectionTypeLayout_getBindingRangeImageFormat(
 			self, index
-		))
+		)))
 	}
 
 	pub fn binding_range_descriptor_set_index(&self, index: i64) -> i64 {
@@ -272,10 +279,12 @@ impl TypeLayout {
 		set_index: i64,
 		range_index: i64,
 	) -> BindingType {
-		rcall!(spReflectionTypeLayout_getDescriptorSetDescriptorRangeType(
-			self,
-			set_index,
-			range_index
+		from_slang(rcall!(
+			spReflectionTypeLayout_getDescriptorSetDescriptorRangeType(
+				self,
+				set_index,
+				range_index
+			)
 		))
 	}
 
@@ -284,13 +293,13 @@ impl TypeLayout {
 		set_index: i64,
 		range_index: i64,
 	) -> ParameterCategory {
-		rcall!(
+		from_slang(rcall!(
 			spReflectionTypeLayout_getDescriptorSetDescriptorRangeCategory(
 				self,
 				set_index,
 				range_index
 			)
-		)
+		))
 	}
 
 	pub fn sub_object_range_count(&self) -> i64 {

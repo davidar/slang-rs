@@ -89,7 +89,7 @@ impl Shader {
 
 	pub fn type_layout(&self, ty: &Type, rules: LayoutRules) -> Option<&TypeLayout> {
 		rcall!(
-			spReflection_GetTypeLayout(self, ty as *const _ as *mut _, rules)
+			spReflection_GetTypeLayout(self, ty as *const _ as *mut _, rules.into())
 				as Option<&TypeLayout>
 		)
 	}
@@ -110,11 +110,14 @@ impl Shader {
 		specialization_arg_types: &[GenericArgType],
 		specialization_arg_vals: &[GenericArg],
 	) -> Option<&Generic> {
+		// The Rust enum is not laid out as Slang's.
+		let specialization_arg_types: Vec<sys::SlangReflectionGenericArgType> =
+			specialization_arg_types.iter().map(|&t| t.into()).collect();
 		rcall!(spReflection_specializeGeneric(
 			self,
 			generic as *const _ as *mut _,
 			specialization_arg_types.len() as i64,
-			specialization_arg_types.as_ptr() as *mut _,
+			specialization_arg_types.as_ptr(),
 			specialization_arg_vals.as_ptr() as *mut _,
 			std::ptr::null_mut()
 		) as Option<&Generic>)

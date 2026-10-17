@@ -51,7 +51,7 @@ impl Function {
 	}
 
 	pub fn find_modifier(&self, id: ModifierID) -> Option<&Modifier> {
-		rcall!(spReflectionFunction_FindModifier(self, id) as Option<&Modifier>)
+		rcall!(spReflectionFunction_FindModifier(self, id.into()) as Option<&Modifier>)
 	}
 
 	pub fn generic_container(&self) -> Option<&Generic> {

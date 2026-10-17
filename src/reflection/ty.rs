@@ -1,7 +1,7 @@
 use super::{Generic, UserAttribute, Variable, rcall};
 use crate::{
-	Blob, Error, IUnknown, ResourceAccess, ResourceShape, Result, ScalarType, TypeKind, succeeded,
-	sys,
+	Blob, Error, IUnknown, ResourceAccess, ResourceShape, Result, ScalarType, TypeKind, from_slang,
+	succeeded, sys,
 };
 
 #[repr(transparent)]
@@ -9,7 +9,7 @@ pub struct Type(sys::SlangReflectionType);
 
 impl Type {
 	pub fn kind(&self) -> TypeKind {
-		rcall!(spReflectionType_GetKind(self))
+		from_slang(rcall!(spReflectionType_GetKind(self)))
 	}
 
 	pub fn field_count(&self) -> u32 {
@@ -72,7 +72,7 @@ impl Type {
 	}
 
 	pub fn scalar_type(&self) -> ScalarType {
-		rcall!(spReflectionType_GetScalarType(self))
+		from_slang(rcall!(spReflectionType_GetScalarType(self)))
 	}
 
 	pub fn resource_result_type(&self) -> Option<&Type> {
@@ -84,7 +84,7 @@ impl Type {
 	}
 
 	pub fn resource_access(&self) -> ResourceAccess {
-		rcall!(spReflectionType_GetResourceAccess(self))
+		from_slang(rcall!(spReflectionType_GetResourceAccess(self)))
 	}
 
 	pub fn name(&self) -> Option<&str> {

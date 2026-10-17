@@ -1,5 +1,5 @@
 use super::{Function, TypeLayout, VariableLayout, rcall};
-use crate::{Stage, sys};
+use crate::{Stage, from_slang, sys};
 
 #[repr(transparent)]
 pub struct EntryPoint(sys::SlangReflectionEntryPoint);
@@ -30,7 +30,7 @@ impl EntryPoint {
 	}
 
 	pub fn stage(&self) -> Stage {
-		rcall!(spReflectionEntryPoint_getStage(self))
+		from_slang(rcall!(spReflectionEntryPoint_getStage(self)))
 	}
 
 	pub fn compute_thread_group_size(&self) -> [u64; 3] {

@@ -3,6 +3,7 @@
 // Interface IDs are written in their 8-4-4-4-12 UUID form.
 #![allow(clippy::unusual_byte_groupings)]
 
+mod enums;
 pub mod reflection;
 mod shared_library;
 
@@ -25,18 +26,10 @@ pub use sys::library::{self, Library, LoadError};
 #[cfg(all(feature = "embed", not(feature = "system")))]
 pub use sys::embedded;
 
+pub use enums::*;
 pub use sys::{
-	SlangBindingType as BindingType, SlangCompileTarget as CompileTarget,
-	SlangDebugInfoLevel as DebugInfoLevel, SlangDeclKind as DeclKind,
-	SlangFloatingPointMode as FloatingPointMode, SlangImageFormat as ImageFormat,
-	SlangLayoutRules as LayoutRules, SlangLineDirectiveMode as LineDirectiveMode,
-	SlangMatrixLayoutMode as MatrixLayoutMode, SlangModifierID as ModifierID,
-	SlangOptimizationLevel as OptimizationLevel, SlangParameterCategory as ParameterCategory,
-	SlangReflectionGenericArg as GenericArg, SlangReflectionGenericArgType as GenericArgType,
-	SlangResourceAccess as ResourceAccess, SlangResourceShape as ResourceShape,
-	SlangScalarType as ScalarType, SlangSourceLanguage as SourceLanguage, SlangStage as Stage,
-	SlangTypeKind as TypeKind, SlangUUID as UUID, slang_CompilerOptionName as CompilerOptionName,
-	slang_Modifier as Modifier,
+	SlangReflectionGenericArg as GenericArg, SlangResourceShape as ResourceShape,
+	SlangUUID as UUID, slang_Modifier as Modifier,
 };
 
 macro_rules! vcall {
@@ -84,6 +77,41 @@ unsafe impl Sync for Error {}
 impl std::error::Error for Error {}
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// An enum value Slang returned that these bindings do not know.
+///
+/// The `TryFrom` conversions from the sys enums return it. The safe API
+/// panics with it instead: the embedded release cannot return such a value,
+/// so one means a different Slang library was opened (through
+/// [`library::load`] or the `system` feature), a version mismatch.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct UnknownEnumValue {
+	/// The sys type's name, such as `SlangTypeKind`.
+	pub enum_name: &'static str,
+	pub value: i64,
+}
+
+impl std::fmt::Display for UnknownEnumValue {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(
+			f,
+			"Slang returned {} value {}, which these bindings (Slang {}) do not know; \
+			 the library in use is not the release the crate was built for",
+			self.enum_name,
+			self.value,
+			sys::SLANG_BINDINGS_VERSION
+		)
+	}
+}
+
+impl std::error::Error for UnknownEnumValue {}
+
+/// An enum value read from Slang, as its Rust enum. Panics on a value the
+/// bindings do not know (see [`UnknownEnumValue`]).
+#[track_caller]
+pub(crate) fn from_slang<S, T: TryFrom<S, Error = UnknownEnumValue>>(value: S) -> T {
+	T::try_from(value).unwrap_or_else(|err| panic!("{err}"))
+}
 
 pub(crate) fn succeeded(result: sys::SlangResult) -> bool {
 	result >= 0
@@ -756,7 +784,7 @@ impl Metadata {
 		let mut used = false;
 		let result = vcall!(
 			self,
-			isParameterLocationUsed(category, space_index, register_index, &mut used)
+			isParameterLocationUsed(category.into(), space_index, register_index, &mut used)
 		);
 		succeeded(result).then_some(used)
 	}
@@ -953,7 +981,7 @@ impl Module {
 		let mut blob = null_mut();
 		let code = vcall!(
 			self,
-			findAndCheckEntryPoint(name.as_ptr(), stage, &mut entry_point, &mut blob)
+			findAndCheckEntryPoint(name.as_ptr(), stage.into(), &mut entry_point, &mut blob)
 		);
 		let entry_point = unsafe { EntryPoint::from_raw(entry_point) };
 		unsafe { diagnostics.finish(code, entry_point, blob) }
@@ -1061,7 +1089,7 @@ impl Default for TargetDesc<'_> {
 
 impl<'a> TargetDesc<'a> {
 	pub fn format(mut self, format: CompileTarget) -> Self {
-		self.inner.format = format;
+		self.inner.format = format.into();
 		self
 	}
 
@@ -1150,6 +1178,13 @@ fn path_c_string(path: &Path) -> Option<CString> {
 }
 
 macro_rules! option {
+	($name:ident, $func:ident($p_name:ident: $p_type:ident => $sys:ty)) => {
+		#[inline(always)]
+		pub fn $func(self, $p_name: $p_type) -> Self {
+			self.push_ints(CompilerOptionName::$name, <$sys>::from($p_name).0 as _, 0)
+		}
+	};
+
 	($name:ident, $func:ident($p_name:ident: $p_type:ident)) => {
 		#[inline(always)]
 		pub fn $func(self, $p_name: $p_type) -> Self {
@@ -1181,7 +1216,7 @@ pub struct CompilerOptions {
 impl CompilerOptions {
 	fn push_ints(mut self, name: CompilerOptionName, i0: i32, i1: i32) -> Self {
 		self.options.push(sys::slang_CompilerOptionEntry {
-			name,
+			name: name.into(),
 			value: sys::slang_CompilerOptionValue {
 				kind: sys::slang_CompilerOptionValueKind::Int,
 				intValue0: i0,
@@ -1196,7 +1231,7 @@ impl CompilerOptions {
 
 	fn push_strings(mut self, name: CompilerOptionName, s0: *const i8, s1: *const i8) -> Self {
 		self.options.push(sys::slang_CompilerOptionEntry {
-			name,
+			name: name.into(),
 			value: sys::slang_CompilerOptionValue {
 				kind: sys::slang_CompilerOptionValueKind::String,
 				intValue0: 0,
@@ -1233,7 +1268,7 @@ impl CompilerOptions {
 impl CompilerOptions {
 	option!(MacroDefine, macro_define(key: &str, value: &str));
 	option!(Include, include(path: &str));
-	option!(Language, language(language: SourceLanguage));
+	option!(Language, language(language: SourceLanguage => sys::SlangSourceLanguage));
 	option!(MatrixLayoutColumn, matrix_layout_column(enable: bool));
 	option!(MatrixLayoutRow, matrix_layout_row(enable: bool));
 
@@ -1242,8 +1277,8 @@ impl CompilerOptions {
 		self.push_ints(CompilerOptionName::Profile, profile.0 as _, 0)
 	}
 
-	option!(Stage, stage(stage: Stage));
-	option!(Target, target(target: CompileTarget));
+	option!(Stage, stage(stage: Stage => sys::SlangStage));
+	option!(Target, target(target: CompileTarget => sys::SlangCompileTarget));
 	option!(WarningsAsErrors, warnings_as_errors(warning_codes: &str));
 	option!(DisableWarnings, disable_warnings(warning_codes: &str));
 	option!(EnableWarning, enable_warning(warning_code: &str));
@@ -1261,10 +1296,10 @@ impl CompilerOptions {
 	option!(DefaultImageFormatUnknown, default_image_format_unknown(enable: bool));
 	option!(DisableDynamicDispatch, disable_dynamic_dispatch(enable: bool));
 	option!(DisableSpecialization, disable_specialization(enable: bool));
-	option!(FloatingPointMode, floating_point_mode(mode: FloatingPointMode));
-	option!(DebugInformation, debug_information(level: DebugInfoLevel));
-	option!(LineDirectiveMode, line_directive_mode(mode: LineDirectiveMode));
-	option!(Optimization, optimization(level: OptimizationLevel));
+	option!(FloatingPointMode, floating_point_mode(mode: FloatingPointMode => sys::SlangFloatingPointMode));
+	option!(DebugInformation, debug_information(level: DebugInfoLevel => sys::SlangDebugInfoLevel));
+	option!(LineDirectiveMode, line_directive_mode(mode: LineDirectiveMode => sys::SlangLineDirectiveMode));
+	option!(Optimization, optimization(level: OptimizationLevel => sys::SlangOptimizationLevel));
 	option!(Obfuscate, obfuscate(enable: bool));
 	option!(VulkanUseEntryPointName, vulkan_use_entry_point_name(enable: bool));
 	option!(GLSLForceScalarLayout, glsl_force_scalar_layout(enable: bool));

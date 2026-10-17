@@ -10,6 +10,7 @@ categories = ["compilers", "api-bindings"]
 
 [dependencies]
 libloading = "0.8"
+serde = { version = "1", features = ["derive"], optional = true }
 shader-slang-sys = { path = "slang-sys", version = "0.1.0", default-features = false }
 
 [dev-dependencies]
@@ -19,7 +20,7 @@ sha2 = "0.10"
 default = ["embed"]
 # Embed the pinned official Slang release in the binary (see README).
 embed = ["shader-slang-sys/embed"]
-serde = ["shader-slang-sys/serde"]
+serde = ["dep:serde", "shader-slang-sys/serde"]
 # Link Slang at build time instead of opening it at run time; see README.
 system = ["shader-slang-sys/system"]
 
