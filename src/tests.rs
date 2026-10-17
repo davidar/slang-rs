@@ -50,10 +50,8 @@ fn compile_test_shader(global_session: &slang::GlobalSession) -> (Vec<u8>, slang
 }
 
 fn words(spirv: &[u8]) -> Vec<u32> {
-	spirv
-		.chunks_exact(4)
-		.map(|w| u32::from_le_bytes([w[0], w[1], w[2], w[3]]))
-		.collect()
+	let (words, _) = spirv.as_chunks::<4>();
+	words.iter().map(|w| u32::from_le_bytes(*w)).collect()
 }
 
 /// Upstream's test, as it was, with the search path now a Rust string.
