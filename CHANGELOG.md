@@ -4,9 +4,10 @@
 
 ### Slang travels with the crate
 
-- **Embedded Slang (the default `embed` feature).** The build downloads the official Slang 2026.14.1 release for the target and checks it against a pinned SHA-256. The compiler library and its SPIR-V optimiser module are embedded in the binary, compressed. At run time they are written once into `$XDG_CACHE_HOME/shader-slang/<version>-<hash>/` and opened from there, so a dependent binary needs no Slang install and no environment variables. `SLANG_RELEASE_ARCHIVE` builds offline from a prefetched archive, and `SLANG_RELEASE_ASSET` picks another release variant. Downloads are cached by checksum. See the README for targets, sizes and the cache layout.
+- **Embedded Slang (the default `embed` feature).** The build downloads the official Slang 2026.14.1 release for the target and checks it against a pinned SHA-256; each file taken out of it is checked against its own pinned SHA-256 too. The compiler library and its SPIR-V optimiser module are embedded in the binary, compressed. At run time they are written once into `$XDG_CACHE_HOME/shader-slang/<version>-<hash>/` and opened from there, so a dependent binary needs no Slang install and no environment variables. `SLANG_RELEASE_ARCHIVE` builds offline from a prefetched archive, and `SLANG_RELEASE_ASSET` picks another release variant. Downloads and the compressed payload are cached by checksum under `$XDG_CACHE_HOME/shader-slang`, which makes a fresh build of the sys crate about 2.5 s instead of 11 s. See the README for targets, sizes and the cache layout.
 - **Slang is opened at run time, not linked.** The C functions are resolved from the library when it opens, the `spReflection*` reflection API included. `library::load(path)` opens a given file. The `system` feature keeps the old link-time behaviour against `SLANG_DIR` / `SLANG_LIB_DIR` / `VULKAN_SDK`.
-- **Checked-in bindings.** The bindgen output for Slang 2026.14.1 is now source (`slang-sys/src/bindings.rs`, `slang-sys/src/functions.rs`). A build needs neither libclang nor a Slang header. The `bindgen` feature and `slang-sys/generate-bindings.sh` regenerate it.
+- **Checked-in bindings.** The bindgen output for Slang 2026.14.1 is now source (`slang-sys/src/bindings.rs`, `slang-sys/src/functions.rs`). A build needs neither libclang nor a Slang header. The `bindgen` feature and `slang-sys/generate-bindings.sh` regenerate it. The one C++-linkage function, `spReflection_GetSession`, is resolved under its MSVC mangled name on Windows as well as its Itanium one.
+- **CI.** GitHub Actions runs fmt, clippy and docs with warnings denied, the tests with the embedded default on Linux x86_64 and aarch64, macOS aarch64 and Windows x86_64, and the `system` and no-default-features builds on Linux.
 
 ### API
 
@@ -32,17 +33,12 @@
 
 ### Known limitations and open work
 
-- **Only Linux x86_64 has been built and run.** The macOS and Windows asset
-  tables, extraction, loading and glslang discovery are written from the
-  release layouts but untested. The checked-in bindings were generated on
-  Linux; the enum representation (`u32` here, `i32` under MSVC) is
-  ABI-identical but unverified.
-- **`spReflection_GetSession` is exported under a C++-mangled name** and will
-  not resolve on MSVC. The safe API does not call it; a call through the sys
-  layer panics with the missing name.
-- **Build-script cost.** Every rebuild of `shader-slang-sys` re-extracts and
-  recompresses the payload in an unoptimised build script, about 11 s. Caching
-  the compressed files by archive checksum would remove it.
+- **Only Linux x86_64 has been run locally.** The asset tables for every
+  target were checked against the release archives (file names, hashes, and
+  the exported symbol names of the compiler libraries), and CI builds and
+  tests the embedded default on Linux aarch64, macOS aarch64 and Windows
+  x86_64; macOS x86_64 and Windows aarch64 have no runner there and remain
+  untested.
 - **Enums returned from Slang** (`TypeKind`, `BindingType` and the other C-like
   enums bindgen produces) are undefined behaviour for any value the bindings
   lack. Pinning the release keeps the bindings and the library in step; a
