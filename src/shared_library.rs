@@ -16,6 +16,7 @@
 
 use std::ffi::{CStr, CString, c_char, c_void};
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::PathBuf;
 use std::ptr::null_mut;
 use std::sync::OnceLock;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -165,13 +166,27 @@ impl SharedLibrary {
 	/// Opens a library file as Slang's own loader does: a name without an
 	/// extension gets the platform's prefix and extension
 	/// (`dir/slang-glslang` is `dir/libslang-glslang.so` on Linux,
-	/// `dir/slang-glslang.dll` on Windows). The library stays open while
+	/// `dir/slang-glslang.dll` on Windows), and a bare name is looked for
+	/// beside the Slang library before the platform's search path, which is
+	/// where Slang's own requests find it. The library stays open while
 	/// Slang holds it.
 	pub fn open(path: &str) -> Result<SharedLibrary> {
 		let file = platform_file_name(path);
-		let library = unsafe { libloading::Library::new(&file) }
-			.map_err(|_| Error::Code(sys::SLANG_E_NOT_FOUND))?;
-		Ok(SharedLibrary::new(OpenedLibrary(library)))
+		let beside = if path.contains(['/', '\\']) {
+			None
+		} else {
+			sys::library::loaded()
+				.and_then(|library| library.path())
+				.and_then(|path| path.parent())
+				.filter(|dir| !dir.as_os_str().is_empty())
+				.map(|dir| dir.join(&file))
+		};
+		for candidate in beside.into_iter().chain([PathBuf::from(&file)]) {
+			if let Ok(library) = unsafe { libloading::Library::new(&candidate) } {
+				return Ok(SharedLibrary::new(OpenedLibrary(library)));
+			}
+		}
+		Err(Error::Code(sys::SLANG_E_NOT_FOUND))
 	}
 
 	/// The address of `name` in the library, or null.

@@ -112,7 +112,7 @@ A process cannot open a library from memory. The first use of Slang in a process
 $XDG_CACHE_HOME/shader-slang/2026.14.1-<content hash>/
 ```
 
-The fallbacks are `~/.cache`, then `%LOCALAPPDATA%`, then the system temporary directory. The directory is written into a sibling and renamed into place, so no process ever sees one half written, and two processes racing both succeed. A directory already in place is checked, every file present at its size, rather than rewritten. The compiler library is then opened from it by absolute path, and Slang finds `slang-glslang` beside it. A root where the library will not open, such as a `noexec` mount, is skipped for the next.
+The fallbacks are `~/.cache`, then `%LOCALAPPDATA%`, then the system temporary directory. The directory is written into a sibling and renamed into place, so no process ever sees one half written, and two processes racing both succeed. A directory already in place is checked, every file present at its size, rather than rewritten. The compiler library is then opened from it by absolute path, and each global session is told to look there for `slang-glslang`, so Slang asks for it by absolute path on every platform. A root where the library will not open, such as a `noexec` mount, is skipped for the next.
 
 | | Bytes |
 |---|---|

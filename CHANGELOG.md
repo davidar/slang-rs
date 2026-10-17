@@ -18,7 +18,7 @@
   - `Session::load_module_from_source`, `loaded_module_count`, `loaded_module`, `loaded_modules`, `global_session` and `is_binary_module_up_to_date`.
   - `Blob::from_slice` reloads stored IR.
   - `GlobalSession::try_new` and `GlobalSession::try_create_session` give the reason for a failure.
-- **Shared-library loaders.** `GlobalSession::set_shared_library_loader` and `shared_library_loader` take a `SharedLibraryLoader`, which can be built from a Rust closure. `SharedLibrary::new` answers symbol lookups from Rust, and `SharedLibrary::open` opens a file as Slang's own loader would.
+- **Shared-library loaders.** `GlobalSession::set_shared_library_loader` and `shared_library_loader` take a `SharedLibraryLoader`, which can be built from a Rust closure. `SharedLibrary::new` answers symbol lookups from Rust, and `SharedLibrary::open` opens a file as Slang's own loader would, looking for a bare name beside the Slang library first, as Slang's own requests resolve.
 - **Slang enums are sound at the FFI boundary.** In `shader-slang-sys` every Slang enum is now a `#[repr(transparent)]` newtype over its integer, with the variants as associated constants, so any value Slang returns is valid. `shader-slang` keeps Rust enums under the same names and variants as before (`TypeKind::Struct`, `CompileTarget::Spirv`, `Stage::Pixel`, ...), generated with the bindings into `src/enums.rs`. Each has `TryFrom<sys::SlangX>`, failing with the new `UnknownEnumValue`, and `From<X> for sys::SlangX`. The reflection accessors and other readers panic on a value the bindings lack, naming the enum and value. The embedded release cannot return one, so such a value means a different Slang was opened through `library::load` or `system`, a version mismatch, which is treated like a function the library does not export. Changed: `x as i32` on these enums no longer compiles; use `sys::SlangX::from(x).0`. Fixed: `Shader::specialize_generic` passed its `GenericArgType` slice to Slang without conversion.
 - **Raw pointers without transmutes.** `Interface::from_raw`, `from_raw_borrowed`, `into_raw`, `as_ptr` and `cast`.
 - **`ResourceShape` is bit flags.** It is now a newtype over the integer instead of an enum, because Slang combines a base shape with array, multisample, shadow, feedback and combined flags. A combination that is not a declared variant was undefined behaviour. The variant names remain as associated constants, so `ResourceShape::SlangTexture2d` and matches on it still work. New: `base_shape`, `flags`, `contains`, `is_array`, `is_multisample`, `is_shadow`, `is_feedback`, `is_combined`, `bits`, `from_bits`.
@@ -27,6 +27,8 @@
 
 ### Fixes
 
+- With the embedded library, each global session is told where `slang-glslang` is, so Slang asks for it by absolute path. Windows has no `$ORIGIN` search, so there the SPIR-V optimiser was silently missing and every compile carried `error[E00100]` in its diagnostics.
+- `CompilerOptions` passed its strings as `*const i8`, which does not compile where `c_char` is unsigned (aarch64 Linux).
 - `GlobalSession::new` and `create_session` honour their result codes.
 - Failure paths no longer unwrap a possibly null diagnostics blob. The plain methods release the diagnostics blob they leaked on success.
 - C strings Slang returns (module name and path, build tag, dependency paths) read as `""` when null instead of being dereferenced.

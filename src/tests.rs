@@ -115,6 +115,43 @@ fn compiles_to_spirv() {
 /// (b) The SPIR-V optimiser module is present and used: refusing it through
 /// a shared-library loader still compiles, to different code, and the only
 /// sign is an error on the success path.
+/// A loader that only defers to the default must still find `slang-glslang`:
+/// Slang asks for it by bare name unless told where it is.
+#[test]
+fn default_loader_finds_glslang() {
+	let loader =
+		slang::SharedLibraryLoader::new(|path: &str, default: &slang::DefaultLoader<'_>| {
+			default.load(path)
+		});
+	let deferring = global_session();
+	deferring.set_shared_library_loader(Some(&loader));
+	let (_, diagnostics) = compile_test_shader(&deferring);
+	assert!(
+		diagnostics.is_empty(),
+		"a compile through the deferring loader reported: {diagnostics}"
+	);
+}
+
+/// `SharedLibrary::open` finds a bare name beside the Slang library.
+#[cfg(all(feature = "embed", not(feature = "system")))]
+#[test]
+fn shared_library_open_looks_beside_slang() {
+	global_session();
+	let glslang = slang::embedded::files()
+		.iter()
+		.find(|file| file.name.contains("glslang"))
+		.expect("the payload holds slang-glslang");
+	let bare = glslang
+		.name
+		.trim_start_matches("lib")
+		.trim_end_matches(".dll")
+		.trim_end_matches(".dylib")
+		.trim_end_matches(".so");
+	assert!(!bare.contains('/'));
+	let library = slang::SharedLibrary::open(bare).expect("opens beside the Slang library");
+	assert!(!library.find_symbol("glslang_compile").is_null());
+}
+
 #[test]
 fn optimiser_is_loaded() {
 	let (normal, normal_diagnostics) = compile_test_shader(&global_session());

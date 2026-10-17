@@ -466,7 +466,11 @@ impl GlobalSession {
 		// A failure that still hands back a session releases it here.
 		let session = unsafe { GlobalSession::from_raw(global_session) };
 		match session {
-			Some(session) if succeeded(code) => Ok(session),
+			Some(session) if succeeded(code) => {
+				#[cfg(all(feature = "embed", not(feature = "system")))]
+				session.locate_embedded_modules();
+				Ok(session)
+			}
 			_ if !succeeded(code) => Err(Error::Code(code)),
 			_ => Err(Error::Code(sys::SLANG_FAIL)),
 		}
@@ -486,6 +490,29 @@ impl GlobalSession {
 			Some(session) if succeeded(code) => Ok(session),
 			_ if !succeeded(code) => Err(Error::Code(code)),
 			_ => Err(Error::Code(sys::SLANG_FAIL)),
+		}
+	}
+
+	/// Slang loads its SPIR-V tools (`slang-glslang`) on demand, asking its
+	/// loader for them by bare name. Linux and macOS resolve that beside the
+	/// compiler library through its own search path; Windows does not. With
+	/// the embedded library the directory is known, so the session is told
+	/// to look there and every request is made by absolute path.
+	#[cfg(all(feature = "embed", not(feature = "system")))]
+	fn locate_embedded_modules(&self) {
+		let Ok(dir) = crate::embedded::dir() else {
+			return;
+		};
+		let Some(dir) = dir.to_str().and_then(|dir| CString::new(dir).ok()) else {
+			return;
+		};
+		for pass_through in [
+			sys::SlangPassThrough::Glslang,
+			sys::SlangPassThrough::SpirvOpt,
+			sys::SlangPassThrough::SpirvDis,
+			sys::SlangPassThrough::SpirvLink,
+		] {
+			vcall!(self, setDownstreamCompilerPath(pass_through, dir.as_ptr()));
 		}
 	}
 
@@ -1229,7 +1256,12 @@ impl CompilerOptions {
 		self
 	}
 
-	fn push_strings(mut self, name: CompilerOptionName, s0: *const i8, s1: *const i8) -> Self {
+	fn push_strings(
+		mut self,
+		name: CompilerOptionName,
+		s0: *const c_char,
+		s1: *const c_char,
+	) -> Self {
 		self.options.push(sys::slang_CompilerOptionEntry {
 			name: name.into(),
 			value: sys::slang_CompilerOptionValue {
@@ -1265,6 +1297,8 @@ impl CompilerOptions {
 	}
 }
 
+// Left as written: rustfmt versions disagree on these macro calls.
+#[rustfmt::skip]
 impl CompilerOptions {
 	option!(MacroDefine, macro_define(key: &str, value: &str));
 	option!(Include, include(path: &str));
