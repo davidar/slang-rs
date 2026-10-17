@@ -150,6 +150,40 @@ fn shared_library_open_looks_beside_slang() {
 	assert!(!library.find_symbol("glslang_compile").is_null());
 }
 
+/// A global session and what it creates move between threads and sit in a
+/// `Mutex`; see `IUnknown`.
+#[test]
+fn sessions_are_send() {
+	fn assert_send<T: Send>() {}
+	assert_send::<slang::GlobalSession>();
+	assert_send::<slang::Session>();
+	assert_send::<slang::Module>();
+	assert_send::<slang::ComponentType>();
+	assert_send::<slang::Blob>();
+
+	let shared = std::sync::Mutex::new(global_session());
+	let code = std::thread::scope(|scope| {
+		scope
+			.spawn(|| {
+				let global_session = shared.lock().unwrap();
+				compile_test_shader(&global_session).0
+			})
+			.join()
+			.unwrap()
+	});
+	assert_eq!(words(&code)[0], SPIRV_MAGIC);
+}
+
+#[test]
+fn slang_version_is_the_bindings_version() {
+	assert_eq!(
+		slang::SLANG_VERSION,
+		shader_slang_sys::SLANG_BINDINGS_VERSION
+	);
+	#[cfg(all(feature = "embed", not(feature = "system")))]
+	assert_eq!(slang::SLANG_VERSION, slang::embedded::version());
+}
+
 #[test]
 fn optimiser_is_loaded() {
 	let (normal, normal_diagnostics) = compile_test_shader(&global_session());

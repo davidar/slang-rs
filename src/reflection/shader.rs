@@ -135,18 +135,23 @@ impl Shader {
 		rcall!(spReflection_getHashedStringCount(self))
 	}
 
+	/// The string literal at `index` of those the program hashes with
+	/// `getStringHash`, or `None` past the count, or for one Slang hands back
+	/// null or not as UTF-8.
 	pub fn hashed_string(&self, index: u64) -> Option<&str> {
 		let mut len = 0;
 		let result = rcall!(spReflection_getHashedString(self, index, &mut len));
-
-		(!result.is_null()).then(|| {
-			let slice = unsafe { std::slice::from_raw_parts(result as *const u8, len) };
-			std::str::from_utf8(slice).unwrap()
-		})
+		if result.is_null() {
+			return None;
+		}
+		let slice = unsafe { std::slice::from_raw_parts(result as *const u8, len) };
+		std::str::from_utf8(slice).ok()
 	}
 
-	pub fn hashed_strings(&self) -> impl ExactSizeIterator<Item = &str> {
-		(0..self.hashed_string_count() as usize).map(|i| self.hashed_string(i as u64).unwrap())
+	/// Every hashed string literal, skipping any [`hashed_string`](Self::hashed_string)
+	/// returns `None` for.
+	pub fn hashed_strings(&self) -> impl Iterator<Item = &str> {
+		(0..self.hashed_string_count()).filter_map(|i| self.hashed_string(i))
 	}
 
 	pub fn global_params_type_layout(&self) -> Option<&TypeLayout> {

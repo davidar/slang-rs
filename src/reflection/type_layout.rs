@@ -131,10 +131,15 @@ impl TypeLayout {
 		self.ty()?.resource_result_type()
 	}
 
+	/// The shape of a resource type, or `None` only when the layout has no
+	/// type; for a resource that is not a texture or buffer it is
+	/// `ResourceShape::SlangResourceNone`.
 	pub fn resource_shape(&self) -> Option<ResourceShape> {
 		Some(self.ty()?.resource_shape())
 	}
 
+	/// `None` only when the layout has no type; see
+	/// [`resource_shape`](Self::resource_shape).
 	pub fn resource_access(&self) -> Option<ResourceAccess> {
 		Some(self.ty()?.resource_access())
 	}

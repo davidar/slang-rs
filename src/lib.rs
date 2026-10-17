@@ -27,6 +27,11 @@ pub use sys::library::{self, Library, LoadError};
 pub use sys::embedded;
 
 pub use enums::*;
+
+/// The Slang release the bindings were generated from, and with the
+/// `embed` feature the one carried in the binary: `"2026.14.1"`. Available
+/// whatever the features, for cache keys and log lines.
+pub const SLANG_VERSION: &str = sys::SLANG_BINDINGS_VERSION;
 pub use sys::{
 	SlangReflectionGenericArg as GenericArg, SlangResourceShape as ResourceShape,
 	SlangUUID as UUID, slang_Modifier as Modifier,
@@ -361,8 +366,21 @@ pub unsafe trait Interface: Sized + Clone {
 	}
 }
 
+/// A reference-counted Slang object; every interface wrapper is one of these.
+///
+/// Slang's objects belong to no thread: a global session, a session and the
+/// objects created from them may be used from any thread, one at a time,
+/// with external synchronisation (a `Mutex` will do), and distinct global
+/// sessions may be used concurrently. The wrappers are therefore `Send`
+/// and not `Sync`.
 #[repr(transparent)]
 pub struct IUnknown(std::ptr::NonNull<std::ffi::c_void>);
+
+// SAFETY: Slang's user guide ("Multithreading"): its objects are not tied
+// to a thread; operations on a shared global session, session or objects
+// created from them need external synchronisation, which `Send` without
+// `Sync` enforces.
+unsafe impl Send for IUnknown {}
 
 unsafe impl Interface for IUnknown {
 	type Vtable = sys::ISlangUnknown__bindgen_vtable;
@@ -418,6 +436,14 @@ impl Blob {
 	}
 }
 
+/// The root Slang object: it holds the core module and creates sessions.
+///
+/// Creating one costs about 100 ms, so keep it. It can move between threads
+/// and sit in a `Mutex`, and a session or module created from it may be
+/// used from any thread, but only one thread at a time may use any of them
+/// (see [`IUnknown`]). Threads that compile concurrently need a global
+/// session each. Slang asks that a global session outlive everything
+/// created from it.
 #[repr(transparent)]
 #[derive(Clone)]
 pub struct GlobalSession(IUnknown);
@@ -560,6 +586,8 @@ impl GlobalSession {
 	}
 }
 
+/// A compilation session: targets, search paths and options, and the
+/// modules loaded under them. Same threading rules as [`GlobalSession`].
 #[repr(transparent)]
 #[derive(Clone)]
 pub struct Session(IUnknown);

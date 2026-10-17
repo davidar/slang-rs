@@ -21,6 +21,8 @@ impl VariableLayout {
 		rcall!(spReflectionVariableLayout_GetTypeLayout(self) as Option<&TypeLayout>)
 	}
 
+	/// The category the variable is laid out in, or `None` only when it has
+	/// no type layout, which a parameter Slang reflects always has.
 	pub fn category(&self) -> Option<ParameterCategory> {
 		Some(self.type_layout()?.parameter_category())
 	}
@@ -29,6 +31,8 @@ impl VariableLayout {
 		self.type_layout().map_or(0, |tl| tl.category_count())
 	}
 
+	/// `None` only when the variable has no type layout; see
+	/// [`category`](Self::category).
 	pub fn category_by_index(&self, index: u32) -> Option<ParameterCategory> {
 		Some(self.type_layout()?.category_by_index(index))
 	}
