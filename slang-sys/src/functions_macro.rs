@@ -73,6 +73,9 @@ macro_rules! slang_functions {
 			///
 			/// Resolved from the Slang library opened at run time; the first
 			/// call opens it if nothing has (see [`library`](crate::library)).
+			///
+			/// # Safety
+			/// As for the C function of the same name in `slang.h`.
 			#[inline]
 			pub unsafe fn $name($($arg: $ty),*) $(-> $ret)? {
 				let f = $crate::library::functions()

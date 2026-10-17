@@ -43,9 +43,6 @@
 - **Build-script cost.** Every rebuild of `shader-slang-sys` re-extracts and
   recompresses the payload in an unoptimised build script, about 11 s. Caching
   the compressed files by archive checksum would remove it.
-- **Clippy.** The branch adds warnings in the main crate and the checked-in
-  bindgen output produces about 200 in the sys crate; the generated files want
-  an `allow` and the rest a tidy pass before a release.
 - **Enums returned from Slang** (`TypeKind`, `BindingType` and the other C-like
   enums bindgen produces) are undefined behaviour for any value the bindings
   lack. Pinning the release keeps the bindings and the library in step; a

@@ -137,7 +137,7 @@ impl Shader {
 		let result = rcall!(spReflection_getHashedString(self, index, &mut len));
 
 		(!result.is_null()).then(|| {
-			let slice = unsafe { std::slice::from_raw_parts(result as *const u8, len as usize) };
+			let slice = unsafe { std::slice::from_raw_parts(result as *const u8, len) };
 			std::str::from_utf8(slice).unwrap()
 		})
 	}

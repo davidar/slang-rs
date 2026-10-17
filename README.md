@@ -7,9 +7,9 @@
 
 Supports both the modern compilation and reflection API.
 
-Currently mostly reflects the needs of our own [engine](https://github.com/FloatyMonkey/engine) but contributions are more than welcome.
+This is a fork of [FloatyMonkey/slang-rs](https://github.com/FloatyMonkey/slang-rs). By default the crate carries Slang itself: a binary that depends on it compiles shaders on a machine with no Slang installed and no environment variables set. The [CHANGELOG](CHANGELOG.md) lists what differs from upstream, and what is known not to work yet.
 
-By default the crate carries Slang itself: a binary that depends on it compiles shaders on a machine with no Slang installed and no environment variables set.
+Upstream mostly reflects the needs of FloatyMonkey's own [engine](https://github.com/FloatyMonkey/engine); contributions are more than welcome.
 
 ## Example
 

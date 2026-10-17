@@ -2,6 +2,8 @@
 
 #![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(non_camel_case_types, non_snake_case, non_upper_case_globals)]
+// The checked-in bindgen output (bindings.rs) is not hand-tidied.
+#![allow(clippy::useless_transmute, clippy::ptr_offset_with_cast, clippy::missing_safety_doc)]
 #[macro_use]
 mod functions_macro;
 pub mod library;

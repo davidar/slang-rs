@@ -23,7 +23,7 @@ impl UserAttribute {
 			self, index, &mut out
 		));
 
-		crate::succeeded(result).then(|| out)
+		crate::succeeded(result).then_some(out)
 	}
 
 	pub fn argument_value_float(&self, index: u32) -> Option<f32> {
@@ -32,7 +32,7 @@ impl UserAttribute {
 			self, index, &mut out
 		));
 
-		crate::succeeded(result).then(|| out)
+		crate::succeeded(result).then_some(out)
 	}
 
 	pub fn argument_value_string(&self, index: u32) -> Option<&str> {
@@ -42,7 +42,7 @@ impl UserAttribute {
 		));
 
 		(!result.is_null()).then(|| {
-			let slice = unsafe { std::slice::from_raw_parts(result as *const u8, len as usize) };
+			let slice = unsafe { std::slice::from_raw_parts(result as *const u8, len) };
 			std::str::from_utf8(slice).unwrap()
 		})
 	}

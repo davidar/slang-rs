@@ -1,5 +1,8 @@
 //! Rust bindings for the Slang shader language compiler
 
+// Interface IDs are written in their 8-4-4-4-12 UUID form.
+#![allow(clippy::unusual_byte_groupings)]
+
 pub mod reflection;
 mod shared_library;
 
@@ -123,13 +126,13 @@ unsafe fn str_from_ptr<'a>(ptr: *const c_char) -> &'a str {
 /// let mut diagnostics = shader_slang::Diagnostics::new();
 /// let module = session.load_module_with_diagnostics("shader.slang", &mut diagnostics)?;
 /// let entry = module.find_and_check_entry_point_with_diagnostics(
-/// 	"main",
-/// 	shader_slang::Stage::Compute,
-/// 	&mut diagnostics,
+///     "main",
+///     shader_slang::Stage::Compute,
+///     &mut diagnostics,
 /// )?;
 /// let program = session.create_composite_component_type_with_diagnostics(
-/// 	&[module.into(), entry.into()],
-/// 	&mut diagnostics,
+///     &[module.into(), entry.into()],
+///     &mut diagnostics,
 /// )?;
 /// let linked = program.link_with_diagnostics(&mut diagnostics)?;
 /// let code = linked.entry_point_code_with_diagnostics(0, 0, &mut diagnostics)?;
@@ -263,7 +266,7 @@ pub unsafe trait Interface: Sized + Clone {
 	#[doc(hidden)]
 	#[inline(always)]
 	unsafe fn vtable(&self) -> &Self::Vtable {
-		unsafe { &**(self.as_raw() as *mut *mut Self::Vtable) }
+		unsafe { &**self.as_raw::<*mut Self::Vtable>() }
 	}
 
 	#[doc(hidden)]
@@ -667,7 +670,7 @@ impl Session {
 
 	/// How many modules the session holds, imports included.
 	pub fn loaded_module_count(&self) -> i64 {
-		vcall!(self, getLoadedModuleCount()) as i64
+		vcall!(self, getLoadedModuleCount())
 	}
 
 	pub fn loaded_module(&self, index: i64) -> Option<Module> {
@@ -755,7 +758,7 @@ impl Metadata {
 			self,
 			isParameterLocationUsed(category, space_index, register_index, &mut used)
 		);
-		succeeded(result).then(|| used)
+		succeeded(result).then_some(used)
 	}
 }
 
@@ -1012,11 +1015,11 @@ impl Module {
 	}
 
 	pub fn dependency_file_count(&self) -> i32 {
-		vcall!(self, getDependencyFileCount()) as i32
+		vcall!(self, getDependencyFileCount())
 	}
 
 	pub fn dependency_file_path(&self, index: i32) -> &str {
-		let path = vcall!(self, getDependencyFilePath(index as i32));
+		let path = vcall!(self, getDependencyFilePath(index));
 		unsafe { str_from_ptr(path) }
 	}
 

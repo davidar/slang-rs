@@ -52,6 +52,10 @@ pub(super) use rcall;
 
 /// Trait to associate wrapper types with their underlying system types.
 /// This ensures conversions from raw pointers to wrapper types, as performed by the rcall! macro, are type-safe.
+///
+/// # Safety
+/// The implementing type must be `#[repr(transparent)]` over `SysType`, so a
+/// `*mut SysType` can be reinterpreted as a reference to it.
 pub(super) unsafe trait Wrapper {
 	type SysType;
 }
