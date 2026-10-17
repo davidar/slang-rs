@@ -19,6 +19,7 @@
   - `Blob::from_slice` reloads stored IR.
   - `GlobalSession::try_new` and `GlobalSession::try_create_session` give the reason for a failure.
 - **Shared-library loaders.** `GlobalSession::set_shared_library_loader` and `shared_library_loader` take a `SharedLibraryLoader`, which can be built from a Rust closure. `SharedLibrary::new` answers symbol lookups from Rust, and `SharedLibrary::open` opens a file as Slang's own loader would.
+- **Slang enums are sound at the FFI boundary.** In `shader-slang-sys` every Slang enum is now a `#[repr(transparent)]` newtype over its integer, with the variants as associated constants, so any value Slang returns is valid. `shader-slang` keeps Rust enums under the same names and variants as before (`TypeKind::Struct`, `CompileTarget::Spirv`, `Stage::Pixel`, ...), generated with the bindings into `src/enums.rs`. Each has `TryFrom<sys::SlangX>`, failing with the new `UnknownEnumValue`, and `From<X> for sys::SlangX`. The reflection accessors and other readers panic on a value the bindings lack, naming the enum and value. The embedded release cannot return one, so such a value means a different Slang was opened through `library::load` or `system`, a version mismatch, which is treated like a function the library does not export. Changed: `x as i32` on these enums no longer compiles; use `sys::SlangX::from(x).0`. Fixed: `Shader::specialize_generic` passed its `GenericArgType` slice to Slang without conversion.
 - **Raw pointers without transmutes.** `Interface::from_raw`, `from_raw_borrowed`, `into_raw`, `as_ptr` and `cast`.
 - **`ResourceShape` is bit flags.** It is now a newtype over the integer instead of an enum, because Slang combines a base shape with array, multisample, shadow, feedback and combined flags. A combination that is not a declared variant was undefined behaviour. The variant names remain as associated constants, so `ResourceShape::SlangTexture2d` and matches on it still work. New: `base_shape`, `flags`, `contains`, `is_array`, `is_multisample`, `is_shadow`, `is_feedback`, `is_combined`, `bits`, `from_bits`.
 - **Changed: `SessionDesc::search_paths` takes Rust paths** (`impl IntoIterator<Item = impl AsRef<Path>>`) and keeps its own C strings. The old `&[*const i8]` let the strings die before the descriptor was used (upstream issue 31). `.search_paths(&ptrs)` becomes `.search_paths(["dir"])`. `SessionDesc` is no longer `#[repr(transparent)]`; it still derefs to `slang_SessionDesc`.
@@ -38,12 +39,9 @@
   the exported symbol names of the compiler libraries), and CI builds and
   tests the embedded default on Linux aarch64, macOS aarch64 and Windows
   x86_64; macOS x86_64 and Windows aarch64 have no runner there and remain
-  untested.
-- **Enums returned from Slang** (`TypeKind`, `BindingType` and the other C-like
-  enums bindgen produces) are undefined behaviour for any value the bindings
-  lack. Pinning the release keeps the bindings and the library in step; a
-  version bump must regenerate them. Newtypes with fallible conversion would
-  close this properly.
+  untested. The sys newtype enums are `u32` or `i32` as bindgen saw them on
+  Linux; `slang.h` gives nearly every enum a fixed underlying type, which is
+  the same size under MSVC.
 
 ### Found in upstream, not changed here
 

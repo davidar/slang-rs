@@ -130,13 +130,13 @@ The fallbacks are `~/.cache`, then `%LOCALAPPDATA%`, then the system temporary d
 
 To compile to DXIL bytecode, also put `dxil.dll` and `dxcompiler.dll` from the [Microsoft DirectXShaderCompiler](https://github.com/microsoft/DirectXShaderCompiler/releases) beside your executable.
 
-The bindings were generated from the 2026.14.1 headers and must be used with that release. They are checked in as `slang-sys/src/bindings.rs` and `slang-sys/src/functions.rs`, so a build needs neither libclang nor a Slang header. The `bindgen` feature regenerates them at build time from `SLANG_INCLUDE_DIR`, `SLANG_DIR` or `VULKAN_SDK`. To refresh the checked-in copies:
+The bindings were generated from the 2026.14.1 headers and must be used with that release. They are checked in as `slang-sys/src/bindings.rs` and `slang-sys/src/functions.rs`, with the safe crate's enums in `src/enums.rs`, so a build needs neither libclang nor a Slang header. The `bindgen` feature regenerates them at build time from `SLANG_INCLUDE_DIR`, `SLANG_DIR` or `VULKAN_SDK`. To refresh the checked-in copies:
 
 ```sh
 SLANG_DIR=/path/to/slang slang-sys/generate-bindings.sh
 ```
 
-The C functions, the reflection API among them, are resolved by name when the library opens. Calling one the library does not export panics with its name. The one function `slang.h` declares with C++ linkage, `spReflection_GetSession`, is looked up under its Itanium and MSVC mangled names.
+The C functions, the reflection API among them, are resolved by name when the library opens. Calling one the library does not export panics with its name. Likewise an enum value the bindings do not know, which only a different Slang release can return, panics with the enum and the value. The one function `slang.h` declares with C++ linkage, `spReflection_GetSession`, is looked up under its Itanium and MSVC mangled names.
 
 ## Shared-library loaders
 
